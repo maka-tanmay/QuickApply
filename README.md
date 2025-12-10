@@ -180,4 +180,3 @@ This is a prototype/MVP. Contributions welcome! Areas for improvement:
 ## Support
 
 For issues or questions, please open an issue in the repository.
-
