@@ -55,14 +55,125 @@ function setupTabNavigation() {
       switchToTab(tabName);
       // Update URL hash
       window.location.hash = tabName;
+      // Load dashboard data if dashboard tab is selected
+      if (tabName === 'dashboard') {
+        loadDashboardData();
+      }
     });
   });
   
   // Check for hash in URL to open specific tab (e.g., #ai-settings)
   const hash = window.location.hash.slice(1); // Remove the #
-  if (hash && ['profiles', 'ai-settings', 'cover-letters'].includes(hash)) {
+  if (hash && ['profiles', 'ai-settings', 'cover-letters', 'dashboard'].includes(hash)) {
     console.log('JobRight AI: Opening tab from URL hash:', hash);
     switchToTab(hash);
+    if (hash === 'dashboard') {
+      loadDashboardData();
+    }
+  }
+}
+
+// Dashboard data loading
+async function loadDashboardData() {
+  try {
+    await Promise.all([
+      loadDashboardStats(),
+      loadDashboardApplications(),
+      loadDashboardSuggestions()
+    ]);
+  } catch (error) {
+    console.error('Error loading dashboard data:', error);
+  }
+}
+
+async function loadDashboardStats() {
+  try {
+    const stats = await chrome.runtime.sendMessage({ type: 'getApplicationStats' }) || {};
+    const totalEl = document.getElementById('dashboard-stat-total');
+    const responseEl = document.getElementById('dashboard-stat-response');
+    const interviewEl = document.getElementById('dashboard-stat-interview');
+    const offersEl = document.getElementById('dashboard-stat-offers');
+    
+    if (totalEl) totalEl.textContent = stats.total || 0;
+    if (responseEl) responseEl.textContent = (stats.responseRate || 0) + '%';
+    if (interviewEl) interviewEl.textContent = (stats.interviewRate || 0) + '%';
+    if (offersEl) offersEl.textContent = stats.byStatus?.offered || 0;
+  } catch (error) {
+    console.error('Error loading dashboard stats:', error);
+  }
+}
+
+async function loadDashboardApplications() {
+  try {
+    const applications = await chrome.runtime.sendMessage({ type: 'getApplications' }) || [];
+    const list = document.getElementById('dashboard-application-list');
+    
+    if (!list) return;
+    
+    if (applications.length === 0) {
+      list.innerHTML = `
+        <li class="empty-state">
+          <div class="empty-state-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            </svg>
+          </div>
+          <h3>No applications tracked</h3>
+          <p>Applications you fill using the extension will appear here</p>
+        </li>
+      `;
+      return;
+    }
+    
+    // Show recent 10 applications
+    const recentApps = applications.slice(0, 10);
+    list.innerHTML = recentApps.map(app => {
+      const date = app.appliedAt ? new Date(app.appliedAt).toLocaleDateString() : 'N/A';
+      const statusClass = `status-${app.status || 'saved'}`;
+      return `
+        <li class="application-item">
+          <div class="application-info">
+            <h3>${escapeHtml(app.position || 'Unknown Position')}</h3>
+            <p>${escapeHtml(app.company || 'Unknown Company')} • ${date}</p>
+          </div>
+          <span class="status-badge ${statusClass}">${(app.status || 'saved').charAt(0).toUpperCase() + (app.status || 'saved').slice(1)}</span>
+        </li>
+      `;
+    }).join('');
+  } catch (error) {
+    console.error('Error loading dashboard applications:', error);
+  }
+}
+
+async function loadDashboardSuggestions() {
+  try {
+    const suggestions = await chrome.runtime.sendMessage({ type: 'getApplicationSuggestions' }) || [];
+    const container = document.getElementById('dashboard-suggestions-list');
+    const upcomingContainer = document.getElementById('dashboard-upcoming-list');
+    
+    if (!container) return;
+    
+    if (suggestions.length === 0) {
+      container.innerHTML = '<div class="empty-state"><p>Track more applications to get AI suggestions!</p></div>';
+    } else {
+      container.innerHTML = suggestions.slice(0, 5).map(s => `
+        <div class="suggestion-item">${escapeHtml(s)}</div>
+      `).join('');
+    }
+    
+    // For upcoming actions, we can show interviews scheduled
+    if (upcomingContainer) {
+      const upcoming = suggestions.filter(s => s.toLowerCase().includes('interview') || s.toLowerCase().includes('follow'));
+      if (upcoming.length === 0) {
+        upcomingContainer.innerHTML = '<div class="empty-state"><p>No upcoming interviews or follow-ups</p></div>';
+      } else {
+        upcomingContainer.innerHTML = upcoming.slice(0, 3).map(s => `
+          <div class="suggestion-item">${escapeHtml(s)}</div>
+        `).join('');
+      }
+    }
+  } catch (error) {
+    console.error('Error loading dashboard suggestions:', error);
   }
 }
 
