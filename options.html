@@ -280,6 +280,7 @@
         <button class="nav-tab active" data-tab="profiles">Profiles</button>
         <button class="nav-tab" data-tab="ai-settings">AI Settings</button>
         <button class="nav-tab" data-tab="cover-letters">Cover Letters</button>
+        <button class="nav-tab" data-tab="dashboard">Dashboard</button>
       </nav>
     </div>
   </header>
@@ -1013,6 +1014,39 @@ Python, JavaScript, React, AWS, Docker, PostgreSQL"></textarea>
             <h3>No cover letters saved</h3>
             <p>Generate a cover letter on a job page and it will appear here.</p>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Dashboard Tab -->
+    <div id="dashboard-tab" class="tab-content">
+      <div class="page-header">
+        <h2 class="page-title">Career Command Center</h2>
+        <p class="page-subtitle">Track your job applications and analyze your progress</p>
+      </div>
+
+      <div class="card">
+        <div style="text-align: center; padding: 40px;">
+          <div style="margin-bottom: 20px;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="48" height="48" style="color: var(--color-accent);">
+              <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+              <line x1="16" y1="2" x2="16" y2="6"/>
+              <line x1="8" y1="2" x2="8" y2="6"/>
+              <line x1="3" y1="10" x2="21" y2="10"/>
+            </svg>
+          </div>
+          <h3 style="margin-bottom: 10px;">Application Dashboard</h3>
+          <p style="color: var(--color-text-muted); margin-bottom: 30px;">
+            View detailed analytics, track application status, and get insights into your job search progress.
+          </p>
+          <button id="open-dashboard-btn" class="btn btn-primary" style="padding: 12px 24px; font-size: 14px;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18" style="margin-right: 8px;">
+              <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+              <polyline points="15,3 21,3 21,9"/>
+              <line x1="10" y1="14" x2="21" y2="3"/>
+            </svg>
+            Open Dashboard
+          </button>
         </div>
       </div>
     </div>

@@ -430,7 +430,13 @@ function setupEventListeners() {
     e.preventDefault();
     await saveProfile();
   });
-  
+
+  // Dashboard button
+  document.getElementById('open-dashboard-btn')?.addEventListener('click', () => {
+    const dashboardUrl = chrome.runtime.getURL('dashboard.html');
+    chrome.tabs.create({ url: dashboardUrl });
+  });
+
 }
 
 function showProfileForm(profile = null) {

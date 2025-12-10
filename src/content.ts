@@ -2767,6 +2767,9 @@ async function showCoverLetterGenerator() {
         <button class="jr-cl-btn jr-cl-btn-primary" id="jr-cl-improve" disabled>
           🔧 Apply Instructions
         </button>
+        <button class="jr-cl-btn jr-cl-btn-secondary" id="jr-cl-copy" disabled>
+          📋 Copy to Clipboard
+        </button>
         <button class="jr-cl-btn jr-cl-btn-secondary" id="jr-cl-download" disabled>
           📄 Download PDF
         </button>
@@ -2788,6 +2791,7 @@ async function showCoverLetterGenerator() {
   const statusEl = modal.querySelector('#jr-cl-status') as HTMLElement;
   const generateBtn = modal.querySelector('#jr-cl-generate') as HTMLButtonElement;
   const improveBtn = modal.querySelector('#jr-cl-improve') as HTMLButtonElement;
+  const copyBtn = modal.querySelector('#jr-cl-copy') as HTMLButtonElement;
   const downloadBtn = modal.querySelector('#jr-cl-download') as HTMLButtonElement;
   const uploadBtn = modal.querySelector('#jr-cl-upload') as HTMLButtonElement;
   
@@ -2847,6 +2851,7 @@ async function showCoverLetterGenerator() {
         textarea.value = response.coverLetter;
         setStatus('✅ Cover letter generated! Review, edit, or use the buttons below to refine.', 'success');
         improveBtn.disabled = false;
+        copyBtn.disabled = false;
         downloadBtn.disabled = false;
         uploadBtn.disabled = false;
         instructionsSection.style.display = 'block';

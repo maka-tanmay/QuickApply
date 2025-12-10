@@ -4,4 +4,11 @@ dist/
 .DS_Store
 .env
 *.local
+.vscode/
+.idea/
+*.swp
+*.swo
+Thumbs.db
+*.tmp
+.cache/
 

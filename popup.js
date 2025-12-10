@@ -34,6 +34,7 @@ const elements = {
   coverLetterText: document.getElementById('cover-letter-text'),
   
   // Footer links
+  settingsLink: document.getElementById('settings-link'),
   helpLink: document.getElementById('help-link'),
   feedbackLink: document.getElementById('feedback-link')
 };
@@ -347,6 +348,14 @@ function setupEventListeners() {
   }
   
   
+  // Settings link
+  if (elements.settingsLink) {
+    elements.settingsLink.addEventListener('click', (e) => {
+      e.preventDefault();
+      chrome.runtime.openOptionsPage();
+    });
+  }
+
   // Help link
   if (elements.helpLink) {
     elements.helpLink.addEventListener('click', (e) => {
