@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>JobRight AI</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    /* Popup-specific overrides */
+    body {
+      width: 360px;
+      overflow-x: hidden;
+    }
+
+    .header {
+      padding: 16px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--color-border);
+    }
+
+    .content {
+      padding: 20px;
+    }
+
+    /* Profile Selector */
+    .profile-selector {
+      margin-bottom: 16px;
+    }
+
+    .selector-label {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--color-text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 8px;
+      display: block;
+    }
+
+    .selector-wrapper {
+      position: relative;
+    }
+
+    .selector-wrapper select {
+      width: 100%;
+      padding: 12px 16px;
+      padding-right: 40px;
+      background: var(--color-bg-elevated);
+      border: 1px solid var(--color-border);
+      border-radius: 10px;
+      color: var(--color-text-primary);
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      appearance: none;
+      transition: 0.2s ease;
+    }
+
+    .selector-wrapper select:focus {
+      outline: none;
+      border-color: var(--color-accent);
+      box-shadow: 0 0 0 3px var(--color-accent-glow);
+    }
+
+    .selector-wrapper::after {
+      content: '';
+      position: absolute;
+      right: 14px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 0;
+      height: 0;
+      border-left: 5px solid transparent;
+      border-right: 5px solid transparent;
+      border-top: 5px solid var(--color-text-muted);
+      pointer-events: none;
+    }
+
+    /* Profile Card */
+    .profile-card {
+      background: var(--color-bg-card);
+      border: 1px solid var(--color-border);
+      border-radius: 14px;
+      padding: 16px;
+      margin-bottom: 16px;
+    }
+
+    .profile-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .profile-avatar {
+      width: 44px;
+      height: 44px;
+      background: var(--color-accent-glow);
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--color-accent);
+      border: 1px solid var(--color-border);
+    }
+
+    .profile-info {
+      flex: 1;
+    }
+
+    .profile-name {
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 2px;
+    }
+
+    .profile-email {
+      font-size: 12px;
+      color: var(--color-text-muted);
+    }
+
+    .profile-completeness {
+      margin-top: 12px;
+    }
+
+    .completeness-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 6px;
+    }
+
+    .completeness-label {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--color-text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .completeness-value {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--color-accent);
+    }
+
+    .completeness-bar {
+      height: 4px;
+      background: var(--color-bg-primary);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+
+    .completeness-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--color-accent), var(--color-accent-light));
+      border-radius: 4px;
+      transition: width 0.5s ease;
+    }
+
+    /* No Profile State */
+    .no-profile {
+      text-align: center;
+      padding: 20px 16px;
+    }
+
+    .no-profile-icon {
+      width: 48px;
+      height: 48px;
+      background: var(--color-accent-glow);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 12px;
+    }
+
+    .no-profile-icon svg {
+      width: 24px;
+      height: 24px;
+      color: var(--color-accent);
+    }
+
+    .no-profile h3 {
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+
+    .no-profile p {
+      font-size: 12px;
+      color: var(--color-text-muted);
+    }
+
+    /* Action Buttons */
+    .actions {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .btn-cover-letter {
+      background: linear-gradient(135deg, #10B981, #059669);
+      color: white;
+      box-shadow: 0 4px 12px rgba(16, 185, 129, 0.25);
+    }
+
+    .btn-cover-letter:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 16px rgba(16, 185, 129, 0.35);
+    }
+
+    /* Footer */
+    .footer {
+      padding: 12px 20px;
+      border-top: 1px solid var(--color-border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .footer-version {
+      font-size: 10px;
+      color: var(--color-text-muted);
+    }
+
+    .footer-links {
+      display: flex;
+      gap: 16px;
+    }
+
+    .footer-link {
+      font-size: 11px;
+      color: var(--color-text-muted);
+      text-decoration: none;
+      transition: 0.2s ease;
+    }
+
+    .footer-link:hover {
+      color: var(--color-accent);
+    }
+
+    /* Disabled State */
+    .disabled-state {
+      display: none;
+    }
+
+    .extension-disabled .disabled-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 32px 20px;
+    }
+
+    .extension-disabled .enabled-state {
+      display: none;
+    }
+
+    .disabled-icon {
+      width: 56px;
+      height: 56px;
+      background: var(--color-bg-elevated);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 16px;
+    }
+
+    .disabled-icon svg {
+      width: 28px;
+      height: 28px;
+      color: var(--color-text-muted);
+    }
+
+    .disabled-state h3 {
+      font-size: 15px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+
+    .disabled-state p {
+      font-size: 13px;
+      color: var(--color-text-muted);
+      line-height: 1.5;
+    }
+
+    /* Master Toggle */
+    .toggle-wrapper {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .status-pill {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      padding: 5px 10px;
+      background: var(--color-success-bg);
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--color-success);
+    }
+
+    .status-pill.inactive {
+      background: var(--color-bg-elevated);
+      color: var(--color-text-muted);
+    }
+
+    .status-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: currentColor;
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    .status-pill.inactive .status-dot {
+      animation: none;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    .toggle-switch {
+      position: relative;
+      width: 44px;
+      height: 24px;
+    }
+
+    .toggle-switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .toggle-track {
+      position: absolute;
+      cursor: pointer;
+      inset: 0;
+      background: var(--color-bg-elevated);
+      border-radius: 24px;
+      transition: 0.2s ease;
+      border: 1px solid var(--color-border);
+    }
+
+    .toggle-track::before {
+      position: absolute;
+      content: "";
+      height: 18px;
+      width: 18px;
+      left: 2px;
+      bottom: 2px;
+      background: var(--color-text-muted);
+      border-radius: 50%;
+      transition: 0.2s ease;
+    }
+
+    .toggle-switch input:checked + .toggle-track {
+      background: var(--color-accent);
+      border-color: var(--color-accent);
+    }
+
+    .toggle-switch input:checked + .toggle-track::before {
+      transform: translateX(20px);
+      background: white;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <header class="header">
+      <div class="brand">
+        <div class="brand-logo">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+            <path d="M2 17l10 5 10-5"/>
+            <path d="M2 12l10 5 10-5"/>
+          </svg>
+        </div>
+        <div class="brand-text">
+          <h1>JobRight AI</h1>
+          <span>Career Copilot</span>
+        </div>
+      </div>
+      
+      <div class="toggle-wrapper">
+        <div class="status-pill" id="status-pill">
+          <span class="status-dot"></span>
+          <span id="status-text">Active</span>
+        </div>
+        <label class="toggle-switch">
+          <input type="checkbox" id="extension-toggle" checked>
+          <span class="toggle-track"></span>
+        </label>
+      </div>
+    </header>
+    
+    <!-- Main Content -->
+    <main class="content">
+      <!-- Disabled State -->
+      <div class="disabled-state">
+        <div class="disabled-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"/>
+            <line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/>
+          </svg>
+        </div>
+        <h3>Extension Paused</h3>
+        <p>Toggle the switch above to enable auto-fill and resume features.</p>
+      </div>
+      
+      <!-- Enabled State -->
+      <div class="enabled-state">
+        <!-- Profile Selector -->
+        <div class="profile-selector">
+          <label class="selector-label">Active Profile</label>
+          <div class="selector-wrapper">
+            <select id="profile-select">
+              <option value="">Select a profile...</option>
+            </select>
+          </div>
+        </div>
+        
+        <!-- Profile Card -->
+        <div class="profile-card" id="profile-card">
+          <div class="no-profile" id="no-profile-state">
+            <div class="no-profile-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
+                <circle cx="9" cy="7" r="4"/>
+                <line x1="19" y1="8" x2="19" y2="14"/>
+                <line x1="22" y1="11" x2="16" y2="11"/>
+              </svg>
+            </div>
+            <h3>Create Your Profile</h3>
+            <p>Build your resume to enable smart auto-fill</p>
+          </div>
+          
+          <div id="profile-details" style="display: none;">
+            <div class="profile-header">
+              <div class="profile-avatar" id="profile-avatar">JD</div>
+              <div class="profile-info">
+                <div class="profile-name" id="profile-display-name">John Doe</div>
+                <div class="profile-email" id="profile-display-email">john@example.com</div>
+              </div>
+            </div>
+            <div class="profile-completeness">
+              <div class="completeness-header">
+                <span class="completeness-label">Profile Completeness</span>
+                <span class="completeness-value" id="completeness-percent">0%</span>
+              </div>
+              <div class="completeness-bar">
+                <div class="completeness-fill" id="completeness-fill" style="width: 0%"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Main Actions -->
+        <div class="actions">
+          <button id="build-resume-btn" class="btn btn-primary">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+              <polyline points="14 2 14 8 20 8"/>
+              <line x1="12" y1="18" x2="12" y2="12"/>
+              <line x1="9" y1="15" x2="15" y2="15"/>
+            </svg>
+            <span id="resume-btn-text">Build Resume</span>
+          </button>
+          
+          <button id="scan-page-btn" class="btn btn-secondary">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
+            </svg>
+            Auto-Fill This Page
+          </button>
+          
+          <button id="generate-cover-letter-btn" class="btn btn-cover-letter">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+              <polyline points="14 2 14 8 20 8"/>
+              <line x1="16" y1="13" x2="8" y2="13"/>
+              <line x1="16" y1="17" x2="8" y2="17"/>
+              <line x1="10" y1="9" x2="8" y2="9"/>
+            </svg>
+            <span id="cover-letter-text">📝 Generate Cover Letter</span>
+          </button>
+        </div>
+      </div>
+    </main>
+    
+    <!-- Footer -->
+    <footer class="footer">
+      <span class="footer-version">v1.0.0</span>
+      <div class="footer-links">
+        <a href="#" class="footer-link" id="help-link">Help</a>
+      </div>
+    </footer>
+  </div>
+  
+  <script src="popup.js"></script>
+</body>
+</html>

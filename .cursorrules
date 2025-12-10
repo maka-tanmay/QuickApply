@@ -1,0 +1,33 @@
+# JobRight AI Extension Development Rules
+
+## Code Style
+- Use TypeScript for all source files
+- Follow strict TypeScript settings
+- Use async/await for asynchronous operations
+- Prefer functional programming patterns where appropriate
+
+## Architecture
+- Content scripts should be lightweight and focused on DOM interaction
+- Background service worker handles all storage and API calls
+- Use message passing for communication between components
+- Keep UI components separate from business logic
+
+## Security
+- Never auto-fill sensitive fields (SSN, passwords, etc.)
+- Encrypt sensitive profile data at rest
+- Validate all user inputs
+- Use Content Security Policy where applicable
+
+## User Experience
+- Always show confidence scores
+- Provide clear explanations for suggestions
+- Allow easy editing before accepting
+- Support keyboard navigation
+- Make UI accessible
+
+## Performance
+- Minimize DOM queries
+- Debounce form scanning
+- Cache profile data
+- Lazy load heavy operations
+

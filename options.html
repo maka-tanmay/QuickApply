@@ -1,0 +1,1023 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>JobRight AI - Settings</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    /* Options page specific overrides */
+    .main-container {
+      max-width: 1200px;
+    }
+
+    /* Tab specific styles */
+    .nav-tabs {
+      display: flex;
+      gap: var(--space-xs);
+      background: var(--color-bg-elevated);
+      padding: var(--space-xs);
+      border-radius: var(--radius-lg);
+    }
+
+    .nav-tab {
+      padding: var(--space-sm) var(--space-lg);
+      background: transparent;
+      border: none;
+      border-radius: var(--radius-md);
+      color: var(--color-text-secondary);
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: var(--transition-base);
+    }
+
+    .nav-tab:hover {
+      color: var(--color-text-primary);
+      background: var(--color-bg-card);
+    }
+
+    .nav-tab.active {
+      background: var(--color-accent);
+      color: var(--color-text-inverse);
+    }
+
+    /* Import section */
+    .import-section {
+      display: flex;
+      gap: var(--space-md);
+      padding: var(--space-lg);
+      background: linear-gradient(135deg, var(--color-info-bg), rgba(59, 130, 246, 0.05));
+      border: 1px solid rgba(59, 130, 246, 0.2);
+      border-radius: var(--radius-lg);
+      margin-bottom: var(--space-2xl);
+    }
+
+    .import-section .btn {
+      flex: 1;
+    }
+
+    /* Status messages */
+    .message {
+      display: flex;
+      align-items: center;
+      gap: var(--space-md);
+      padding: var(--space-md) var(--space-lg);
+      border-radius: var(--radius-md);
+      margin-bottom: var(--space-lg);
+      font-size: 14px;
+      animation: slideIn 0.3s ease;
+    }
+
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateY(-10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .message-success {
+      background: var(--color-success-bg);
+      color: var(--color-success);
+      border: 1px solid rgba(16, 185, 129, 0.2);
+    }
+
+    .message-error {
+      background: var(--color-error-bg);
+      color: var(--color-error);
+      border: 1px solid rgba(239, 68, 68, 0.2);
+    }
+
+    .message-info {
+      background: var(--color-info-bg);
+      color: var(--color-info);
+      border: 1px solid rgba(59, 130, 246, 0.2);
+    }
+
+    /* AI Status */
+    #ai-status {
+      display: none;
+      padding: var(--space-md) var(--space-lg);
+      border-radius: var(--radius-md);
+      font-size: 13px;
+      margin-top: var(--space-lg);
+    }
+
+    /* Custom Fields */
+    .custom-field-row {
+      display: flex;
+      gap: var(--space-sm);
+      margin-bottom: var(--space-sm);
+    }
+
+    .custom-field-row input {
+      flex: 1;
+    }
+
+    /* Modal styles */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.7);
+      backdrop-filter: blur(4px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      animation: fadeIn 0.2s ease;
+    }
+
+    .modal {
+      background: var(--color-bg-card);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-xl);
+      width: 90%;
+      max-width: 600px;
+      max-height: 80vh;
+      overflow: hidden;
+      animation: modalIn 0.3s ease;
+    }
+
+    @keyframes modalIn {
+      from { opacity: 0; transform: scale(0.95); }
+      to { opacity: 1; transform: scale(1); }
+    }
+
+    .modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: var(--space-xl);
+      background: var(--color-bg-elevated);
+      border-bottom: 1px solid var(--color-border);
+    }
+
+    .modal-header h3 {
+      font-size: 16px;
+      font-weight: 600;
+    }
+
+    .modal-close {
+      width: 32px;
+      height: 32px;
+      background: var(--color-bg-card);
+      border: 1px solid var(--color-border);
+      border-radius: 50%;
+      color: var(--color-text-secondary);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: var(--transition-base);
+    }
+
+    .modal-close:hover {
+      background: var(--color-error);
+      border-color: var(--color-error);
+      color: white;
+    }
+
+    .modal-body {
+      padding: var(--space-xl);
+      max-height: 50vh;
+      overflow-y: auto;
+    }
+
+    .modal-footer {
+      padding: var(--space-lg) var(--space-xl);
+      background: var(--color-bg-elevated);
+      border-top: 1px solid var(--color-border);
+      display: flex;
+      justify-content: flex-end;
+      gap: var(--space-sm);
+    }
+
+    /* Cover Letter Item */
+    .cover-letter-item {
+      padding: var(--space-lg);
+      background: var(--color-bg-elevated);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-md);
+      margin-bottom: var(--space-md);
+    }
+
+    .cover-letter-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: var(--space-sm);
+    }
+
+    .cover-letter-title {
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    .cover-letter-meta {
+      font-size: 12px;
+      color: var(--color-text-muted);
+    }
+
+    .cover-letter-preview {
+      font-size: 13px;
+      color: var(--color-text-secondary);
+      line-height: 1.5;
+      margin-bottom: var(--space-md);
+      max-height: 60px;
+      overflow: hidden;
+    }
+
+    .cover-letter-actions {
+      display: flex;
+      gap: var(--space-sm);
+    }
+
+    /* Learning Stats */
+    .learning-stats {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: var(--space-lg);
+      padding: var(--space-lg);
+      background: var(--color-bg-elevated);
+      border-radius: var(--radius-md);
+      text-align: center;
+    }
+
+    .learning-stat-value {
+      font-size: 24px;
+      font-weight: 700;
+      color: var(--color-accent);
+    }
+
+    .learning-stat-label {
+      font-size: 12px;
+      color: var(--color-text-muted);
+      margin-top: var(--space-xs);
+    }
+  </style>
+</head>
+<body>
+  <!-- Header -->
+  <header class="header">
+    <div class="header-inner">
+      <div class="brand">
+        <div class="brand-logo">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+            <path d="M2 17l10 5 10-5"/>
+            <path d="M2 12l10 5 10-5"/>
+          </svg>
+      </div>
+        <div class="brand-text">
+          <h1>JobRight AI</h1>
+          <span>Settings & Profile Manager</span>
+      </div>
+      </div>
+      
+      <nav class="nav-tabs">
+        <button class="nav-tab active" data-tab="profiles">Profiles</button>
+        <button class="nav-tab" data-tab="ai-settings">AI Settings</button>
+        <button class="nav-tab" data-tab="cover-letters">Cover Letters</button>
+      </nav>
+    </div>
+  </header>
+  
+  <!-- Main Content -->
+  <main class="main-container">
+    <div id="message-container"></div>
+    
+    <!-- Profiles Tab -->
+    <div id="profiles-tab" class="tab-content active">
+      <div class="page-header">
+        <h2 class="page-title">Your Profiles</h2>
+        <p class="page-subtitle">Manage your resume profiles for smart auto-fill</p>
+    </div>
+    
+    <div class="card">
+      <ul id="profile-list" class="profile-list">
+          <li class="empty-state">
+            <div class="empty-state-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
+                <circle cx="9" cy="7" r="4"/>
+                <line x1="19" y1="8" x2="19" y2="14"/>
+                <line x1="22" y1="11" x2="16" y2="11"/>
+              </svg>
+            </div>
+            <h3>No profiles yet</h3>
+            <p>Create your first profile to start auto-filling job applications</p>
+          </li>
+      </ul>
+    </div>
+    
+      <!-- Profile Form -->
+    <div id="profile-form" class="card">
+        <div class="card-header">
+          <div class="card-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+              <polyline points="14 2 14 8 20 8"/>
+              <line x1="16" y1="13" x2="8" y2="13"/>
+              <line x1="16" y1="17" x2="8" y2="17"/>
+              <polyline points="10 9 9 9 8 9"/>
+            </svg>
+          </div>
+          <div>
+            <h2 class="card-title" id="form-title">Create Profile</h2>
+            <p class="card-subtitle">Fill in your details for smart auto-fill</p>
+          </div>
+        </div>
+        
+        <div class="info-banner">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"/>
+            <path d="M12 16v-4"/>
+            <path d="M12 8h.01"/>
+          </svg>
+          <p>The more fields you complete, the better the auto-fill accuracy. Your data is stored locally and never uploaded.</p>
+      </div>
+      
+        <p id="import-status" class="form-hint" style="margin-bottom: var(--space-xl);"></p>
+      
+      <form id="profile-form-element">
+        <input type="hidden" id="profile-id">
+        
+          <!-- Basic Information -->
+        <div class="form-section">
+            <h3 class="form-section-title">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                <circle cx="12" cy="7" r="4"/>
+              </svg>
+              Basic Information
+            </h3>
+          <div class="form-grid">
+            <div class="form-group">
+                <label class="form-label">Profile Name <span class="required">*</span></label>
+                <input type="text" id="profile-name" class="form-input" required placeholder="e.g., Software Engineer Profile">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Email <span class="required">*</span></label>
+                <input type="email" id="profile-email" class="form-input" required placeholder="you@example.com">
+            </div>
+            <div class="form-group">
+                <label class="form-label">First Name <span class="required">*</span></label>
+                <input type="text" id="first-name" class="form-input" required placeholder="John">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Last Name <span class="required">*</span></label>
+                <input type="text" id="last-name" class="form-input" required placeholder="Doe">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Phone</label>
+                <input type="tel" id="profile-phone" class="form-input" placeholder="+1 234 567 8900">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Location</label>
+                <input type="text" id="profile-location" class="form-input" placeholder="City, State">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Username (for job portals)</label>
+                <input type="text" id="profile-username" class="form-input" placeholder="johndoe123">
+                <p class="form-hint">Used for job site account creation</p>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Country of Residence</label>
+                <input type="text" id="profile-country" class="form-input" placeholder="United States">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Country of Citizenship</label>
+                <input type="text" id="citizenship" class="form-input" placeholder="United States">
+            </div>
+          </div>
+        </div>
+        
+          <!-- Education -->
+        <div class="form-section">
+            <h3 class="form-section-title">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                <path d="M22 10v6M2 10l10-5 10 5-10 5z"/>
+                <path d="M6 12v5c3 3 9 3 12 0v-5"/>
+              </svg>
+              Education
+            </h3>
+          <div class="form-grid">
+            <div class="form-group">
+                <label class="form-label">Highest Education Level</label>
+                <select id="education-level" class="form-select">
+                <option value="">Select...</option>
+                <option value="High School">High School</option>
+                <option value="Some College">Some College</option>
+                <option value="Associate's">Associate's Degree</option>
+                <option value="Bachelor's">Bachelor's Degree</option>
+                <option value="Master's">Master's Degree</option>
+                <option value="PhD">PhD/Doctorate</option>
+                  <option value="Professional">Professional Degree</option>
+              </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">University/College</label>
+                <input type="text" id="university" class="form-input" placeholder="Stanford University">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Major/Field of Study</label>
+                <input type="text" id="major" class="form-input" placeholder="Computer Science">
+            </div>
+            <div class="form-group">
+                <label class="form-label">GPA (optional)</label>
+                <input type="text" id="gpa" class="form-input" placeholder="3.8/4.0">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Currently Enrolled?</label>
+                <select id="enrolled" class="form-select">
+                <option value="">Select...</option>
+                <option value="No">No</option>
+                <option value="Yes">Yes</option>
+              </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Graduation Date</label>
+                <input type="text" id="graduation-date" class="form-input" placeholder="May 2025">
+            </div>
+          </div>
+        </div>
+        
+          <!-- Work Authorization -->
+        <div class="form-section">
+            <h3 class="form-section-title">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+              </svg>
+              Work Authorization & Legal
+            </h3>
+            <div class="form-grid cols-3">
+            <div class="form-group">
+                <label class="form-label">Authorized to work in US?</label>
+                <select id="work-authorized" class="form-select">
+                <option value="">Select...</option>
+                <option value="Yes">Yes</option>
+                <option value="No">No</option>
+              </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Require Visa Sponsorship?</label>
+                <select id="sponsorship" class="form-select">
+                <option value="">Select...</option>
+                <option value="No">No</option>
+                <option value="Yes">Yes</option>
+              </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">18 years or older?</label>
+                <select id="over-18" class="form-select">
+                <option value="">Select...</option>
+                <option value="Yes">Yes</option>
+                <option value="No">No</option>
+              </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Background Check?</label>
+                <select id="background-check" class="form-select">
+                <option value="">Select...</option>
+                <option value="Yes">Yes</option>
+                <option value="No">No</option>
+              </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Drug Test?</label>
+                <select id="drug-test" class="form-select">
+                <option value="">Select...</option>
+                <option value="Yes">Yes</option>
+                <option value="No">No</option>
+              </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Under Non-compete?</label>
+                <select id="non-compete" class="form-select">
+                <option value="">Select...</option>
+                <option value="No">No</option>
+                <option value="Yes">Yes</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        
+          <!-- Work Preferences -->
+        <div class="form-section">
+            <h3 class="form-section-title">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                <rect x="2" y="7" width="20" height="14" rx="2" ry="2"/>
+                <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>
+              </svg>
+              Work Preferences
+            </h3>
+            <div class="form-grid cols-3">
+            <div class="form-group">
+                <label class="form-label">In-office 3+ days?</label>
+                <select id="in-office" class="form-select">
+                <option value="">Select...</option>
+                <option value="Yes">Yes</option>
+                <option value="No">No</option>
+                  <option value="Does not apply">N/A (Remote)</option>
+              </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Prefer Remote?</label>
+                <select id="remote-preference" class="form-select">
+                <option value="">Select...</option>
+                <option value="Yes">Yes</option>
+                  <option value="No">No</option>
+                <option value="Flexible">Flexible/Hybrid</option>
+              </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Willing to Relocate?</label>
+                <select id="relocate" class="form-select">
+                <option value="">Select...</option>
+                <option value="Yes">Yes</option>
+                <option value="No">No</option>
+              </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Willing to Travel?</label>
+                <select id="travel" class="form-select">
+                <option value="">Select...</option>
+                <option value="Yes">Yes</option>
+                <option value="No">No</option>
+                  <option value="Limited">Up to 25%</option>
+              </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Earliest Start Date</label>
+                <input type="text" id="start-date" class="form-input" placeholder="Immediately, 2 weeks">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Employment Type</label>
+                <select id="employment-type" class="form-select">
+                <option value="Full-time">Full-time</option>
+                <option value="Part-time">Part-time</option>
+                <option value="Contract">Contract</option>
+                <option value="Flexible">Flexible</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        
+          <!-- Compensation -->
+        <div class="form-section">
+            <h3 class="form-section-title">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                <line x1="12" y1="1" x2="12" y2="23"/>
+                <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+              </svg>
+              Compensation
+            </h3>
+          <div class="form-grid">
+            <div class="form-group">
+                <label class="form-label">Current Salary (optional)</label>
+                <input type="text" id="current-salary" class="form-input" placeholder="$85,000">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Expected Salary</label>
+                <input type="text" id="expected-salary" class="form-input" placeholder="$100,000 - $120,000">
+            </div>
+          </div>
+        </div>
+        
+          <!-- Demographics -->
+        <div class="form-section">
+            <h3 class="form-section-title">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                <circle cx="9" cy="7" r="4"/>
+                <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+                <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+              </svg>
+              Demographics (Optional - EEO)
+            </h3>
+            <p class="form-hint" style="margin-bottom: var(--space-lg);">Often asked for compliance. Leave blank if you prefer not to answer.</p>
+            <div class="form-grid cols-3">
+            <div class="form-group">
+                <label class="form-label">Gender</label>
+                <select id="gender" class="form-select">
+                <option value="">Prefer not to say</option>
+                <option value="Male">Male</option>
+                <option value="Female">Female</option>
+                <option value="Non-binary">Non-binary</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Ethnicity</label>
+                <select id="ethnicity" class="form-select">
+                <option value="">Prefer not to say</option>
+                <option value="White">White</option>
+                <option value="Black or African American">Black or African American</option>
+                <option value="Asian">Asian</option>
+                <option value="Hispanic or Latino">Hispanic or Latino</option>
+                  <option value="American Indian or Alaska Native">American Indian</option>
+                  <option value="Native Hawaiian or Pacific Islander">Pacific Islander</option>
+                  <option value="Two or More Races">Two or More</option>
+              </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Hispanic/Latino?</label>
+                <select id="hispanic" class="form-select">
+                <option value="">Prefer not to say</option>
+                <option value="Yes">Yes</option>
+                <option value="No">No</option>
+              </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Veteran Status</label>
+                <select id="veteran" class="form-select">
+                <option value="">Prefer not to say</option>
+                  <option value="I am not a protected veteran">Not a protected veteran</option>
+                  <option value="I am a protected veteran">Protected veteran</option>
+                  <option value="I don't wish to answer">Decline to answer</option>
+              </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Disability Status</label>
+                <select id="disability" class="form-select">
+                <option value="">Prefer not to say</option>
+                  <option value="No, I do not have a disability">No disability</option>
+                  <option value="Yes, I have a disability">Yes, disability</option>
+                  <option value="I don't wish to answer">Decline to answer</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        
+          <!-- Links -->
+        <div class="form-section">
+            <h3 class="form-section-title">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+                <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+              </svg>
+              Links & Portfolio
+            </h3>
+          <div class="form-grid">
+            <div class="form-group">
+                <label class="form-label">LinkedIn URL</label>
+                <input type="url" id="linkedin-url" class="form-input" placeholder="https://linkedin.com/in/yourname">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Portfolio/Website</label>
+                <input type="url" id="portfolio-url" class="form-input" placeholder="https://yourportfolio.com">
+            </div>
+            <div class="form-group">
+                <label class="form-label">GitHub URL</label>
+                <input type="url" id="github-url" class="form-input" placeholder="https://github.com/username">
+            </div>
+            <div class="form-group">
+                <label class="form-label">How did you hear about us?</label>
+                <select id="referral-source" class="form-select">
+                <option value="Online Search">Online Search</option>
+                <option value="LinkedIn">LinkedIn</option>
+                <option value="Indeed">Indeed</option>
+                <option value="Company Website">Company Website</option>
+                <option value="Friend/Referral">Friend/Referral</option>
+                <option value="Job Fair">Job Fair</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        
+          <!-- Experience -->
+        <div class="form-section">
+            <h3 class="form-section-title">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                <rect x="2" y="7" width="20" height="14" rx="2" ry="2"/>
+                <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>
+              </svg>
+              Experience & Skills
+            </h3>
+          <div class="form-grid">
+            <div class="form-group">
+                <label class="form-label">Current Job Title</label>
+                <input type="text" id="current-title" class="form-input" placeholder="Software Engineer">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Years of Experience</label>
+                <input type="text" id="years-experience" class="form-input" placeholder="5">
+            </div>
+              <div class="form-group span-2">
+                <label class="form-label">Key Skills</label>
+                <input type="text" id="skills" class="form-input" placeholder="Python, React, Machine Learning, AWS">
+            </div>
+          </div>
+        </div>
+        
+          <!-- Resume Text -->
+        <div class="form-section">
+            <h3 class="form-section-title">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                <polyline points="14 2 14 8 20 8"/>
+              </svg>
+              Resume (Text Version)
+            </h3>
+            <div class="info-banner">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+              </svg>
+              <p>Paste your full resume text here. The AI uses this to generate personalized, compelling answers that highlight your specific experience and achievements.</p>
+          </div>
+          <div class="form-group">
+              <label class="form-label">Resume Content</label>
+              <textarea id="resume-text" class="form-textarea" rows="12" placeholder="JOHN DOE
+Software Engineer | john@example.com | (555) 123-4567
+
+SUMMARY
+Innovative software engineer with 5+ years of experience...
+
+EXPERIENCE
+Senior Software Engineer | Tech Corp | 2020-Present
+• Led development of microservices architecture serving 1M+ users
+• Reduced API response time by 40% through optimization
+
+EDUCATION
+B.S. Computer Science | State University | 2018
+
+SKILLS
+Python, JavaScript, React, AWS, Docker, PostgreSQL"></textarea>
+              <p class="form-hint">The more detail you provide, the better the AI can craft personalized answers.</p>
+          </div>
+        </div>
+        
+          <!-- Answer Bank -->
+        <div class="form-section">
+            <h3 class="form-section-title">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+              </svg>
+              Answer Bank (Pre-written Answers)
+            </h3>
+            <p class="form-hint" style="margin-bottom: var(--space-lg);">Pre-write answers to common questions. These auto-fill when similar questions are detected.</p>
+            <div class="form-grid cols-1">
+              <div class="form-group">
+                <label class="form-label">Why are you interested in this role?</label>
+                <textarea id="answer-why-interested" class="form-textarea" rows="3" placeholder="I am excited about this opportunity because..."></textarea>
+          </div>
+          <div class="form-group">
+                <label class="form-label">Why do you want to work here?</label>
+                <textarea id="answer-why-company" class="form-textarea" rows="3" placeholder="I am drawn to [Company] because..."></textarea>
+          </div>
+          <div class="form-group">
+                <label class="form-label">Tell us about yourself</label>
+                <textarea id="answer-about-yourself" class="form-textarea" rows="3" placeholder="I am a passionate professional with..."></textarea>
+          </div>
+          <div class="form-group">
+                <label class="form-label">What are your greatest strengths?</label>
+                <textarea id="answer-strengths" class="form-textarea" rows="3" placeholder="My key strengths include..."></textarea>
+          </div>
+          <div class="form-group">
+                <label class="form-label">Weakness or area of improvement?</label>
+                <textarea id="answer-weaknesses" class="form-textarea" rows="3" placeholder="One area I'm working on is..."></textarea>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Describe a time you led a team/project</label>
+                <textarea id="answer-leadership" class="form-textarea" rows="3" placeholder="In my role at [Company], I led..."></textarea>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Describe a challenge you overcame</label>
+                <textarea id="answer-challenge" class="form-textarea" rows="3" placeholder="A significant challenge I faced was..."></textarea>
+              </div>
+              <div class="form-group">
+                <label class="form-label">What is your greatest achievement?</label>
+                <textarea id="answer-achievement" class="form-textarea" rows="3" placeholder="My proudest accomplishment is..."></textarea>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Where do you see yourself in 5 years?</label>
+                <textarea id="answer-future-goals" class="form-textarea" rows="3" placeholder="In five years, I see myself..."></textarea>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Anything else you'd like us to know?</label>
+                <textarea id="answer-additional" class="form-textarea" rows="3" placeholder="I would also like to mention..."></textarea>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Custom Fields -->
+          <div class="form-section">
+            <h3 class="form-section-title">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                <circle cx="12" cy="12" r="3"/>
+                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+              </svg>
+              Custom Fields
+            </h3>
+            <p class="form-hint" style="margin-bottom: var(--space-lg);">Add any other fields you commonly need.</p>
+            <div id="custom-fields"></div>
+          </div>
+          
+          <!-- Form Actions -->
+          <div class="btn-group" style="margin-top: var(--space-2xl); padding-top: var(--space-2xl); border-top: 1px solid var(--color-border);">
+            <button type="submit" class="btn btn-primary">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+                <polyline points="17 21 17 13 7 13 7 21"/>
+                <polyline points="7 3 7 8 15 8"/>
+              </svg>
+              Save Profile
+            </button>
+            <button type="button" id="cancel-btn" class="btn btn-secondary">Cancel</button>
+          </div>
+        </form>
+      </div>
+    </div>
+    
+    <!-- AI Settings Tab -->
+    <div id="ai-settings-tab" class="tab-content">
+      <div class="page-header">
+        <h2 class="page-title">AI Settings</h2>
+        <p class="page-subtitle">Configure AI-powered features for smarter form filling</p>
+      </div>
+      
+      <div class="card">
+        <div class="card-header">
+          <div class="card-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 0 1 7 7h1a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1v1a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-1H2a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h1a7 7 0 0 1 7-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 0 1 2-2"/>
+              <circle cx="7.5" cy="14.5" r="1.5"/>
+              <circle cx="16.5" cy="14.5" r="1.5"/>
+            </svg>
+          </div>
+          <div>
+            <h2 class="card-title">AI Configuration</h2>
+            <p class="card-subtitle">Enable smarter form filling and content generation</p>
+          </div>
+        </div>
+        
+        <div class="info-banner">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+          </svg>
+          <p>Enable AI to get smarter form filling, answer open-ended questions, and generate cover letters!</p>
+        </div>
+        
+        <div class="toggle-row">
+          <div class="toggle-label">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
+              <path d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 0 1 7 7h1a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1v1a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-1H2a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h1a7 7 0 0 1 7-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 0 1 2-2"/>
+            </svg>
+            <span>Enable AI-powered features</span>
+          </div>
+          <label class="toggle-switch">
+            <input type="checkbox" id="ai-enabled">
+            <span class="toggle-track"></span>
+          </label>
+        </div>
+        
+        <div class="form-group" style="margin-top: var(--space-xl);">
+          <label class="form-label">AI Provider</label>
+          <select id="ai-provider" class="form-select">
+            <option value="openrouter">OpenRouter (Free Models Available)</option>
+            <option value="perplexity">Perplexity AI</option>
+            <option value="deepseek">DeepSeek</option>
+          </select>
+          <p class="form-hint">Choose your preferred AI provider</p>
+        </div>
+        
+        <!-- OpenRouter Settings -->
+        <div id="openrouter-settings">
+          <div class="form-group">
+            <label class="form-label">OpenRouter API Key</label>
+            <input type="password" id="openrouter-api-key" class="form-input" placeholder="sk-or-v1-xxxxxxxxxxxxxxxx">
+            <p class="form-hint">Get your FREE API key from <a href="https://openrouter.ai/keys" target="_blank" style="color: var(--color-accent);">openrouter.ai/keys</a></p>
+          </div>
+          
+          <div class="form-group">
+            <label class="form-label">Model</label>
+            <select id="openrouter-model" class="form-select">
+              <optgroup label="Free Models">
+                <option value="meta-llama/llama-3.2-3b-instruct:free">Llama 3.2 3B (Free)</option>
+                <option value="google/gemma-2-9b-it:free">Gemma 2 9B (Free)</option>
+                <option value="mistralai/mistral-7b-instruct:free">Mistral 7B (Free)</option>
+                <option value="qwen/qwen-2-7b-instruct:free">Qwen 2 7B (Free)</option>
+                <option value="microsoft/phi-3-mini-128k-instruct:free">Phi-3 Mini (Free)</option>
+              </optgroup>
+              <optgroup label="Paid Models (Better Quality)">
+                <option value="anthropic/claude-3.5-sonnet">Claude 3.5 Sonnet</option>
+                <option value="openai/gpt-4o">GPT-4o</option>
+                <option value="google/gemini-pro-1.5">Gemini Pro 1.5</option>
+                <option value="meta-llama/llama-3.1-70b-instruct">Llama 3.1 70B</option>
+                <option value="deepseek/deepseek-chat">DeepSeek Chat</option>
+              </optgroup>
+            </select>
+            <p class="form-hint" style="color: var(--color-success);">Free models have no cost — great for testing!</p>
+          </div>
+          </div>
+          
+        <!-- Perplexity Settings -->
+        <div id="perplexity-settings" style="display: none;">
+          <div class="form-group">
+            <label class="form-label">Perplexity API Key</label>
+            <input type="password" id="perplexity-api-key" class="form-input" placeholder="pplx-xxxxxxxxxxxxxxxx">
+            <p class="form-hint">Get your API key from <a href="https://www.perplexity.ai/settings/api" target="_blank" style="color: var(--color-accent);">perplexity.ai/settings/api</a></p>
+          </div>
+          
+          <div class="form-group">
+            <label class="form-label">Model</label>
+            <select id="perplexity-model" class="form-select">
+              <option value="sonar">Sonar (Fast, Cheaper)</option>
+              <option value="sonar-pro">Sonar Pro (Better Quality)</option>
+              <option value="sonar-reasoning">Sonar Reasoning (Best for Complex)</option>
+            </select>
+          </div>
+          </div>
+          
+        <!-- DeepSeek Settings -->
+        <div id="deepseek-settings" style="display: none;">
+          <div class="form-group">
+            <label class="form-label">DeepSeek API Key</label>
+            <input type="password" id="deepseek-api-key" class="form-input" placeholder="sk-xxxxxxxxxxxxxxxx">
+            <p class="form-hint">Get your API key from <a href="https://platform.deepseek.com/api_keys" target="_blank" style="color: var(--color-accent);">platform.deepseek.com</a></p>
+          </div>
+          
+          <div class="form-group">
+            <label class="form-label">Model</label>
+            <select id="deepseek-model" class="form-select">
+              <option value="deepseek-chat">DeepSeek Chat (Fast & Cheap)</option>
+              <option value="deepseek-reasoner">DeepSeek Reasoner (Best Quality)</option>
+            </select>
+          </div>
+        </div>
+        
+        <div id="ai-status"></div>
+        
+        <button type="button" id="save-ai-settings" class="btn btn-primary" style="margin-top: var(--space-xl);">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+            <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+            <polyline points="17 21 17 13 7 13 7 21"/>
+            <polyline points="7 3 7 8 15 8"/>
+          </svg>
+          Save AI Settings
+          </button>
+        </div>
+        
+      <!-- AI Learning Card -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+            </svg>
+        </div>
+          <div>
+            <h2 class="card-title">AI Learning</h2>
+            <p class="card-subtitle">The AI learns from your cover letters to match your style</p>
+    </div>
+  </div>
+        
+        <div id="learning-stats" class="learning-stats" style="margin-bottom: var(--space-xl);">
+          <div>
+            <div class="learning-stat-value">0</div>
+            <div class="learning-stat-label">Cover Letters Learned</div>
+          </div>
+          <div>
+            <div class="learning-stat-value">0</div>
+            <div class="learning-stat-label">Preferred Phrases</div>
+          </div>
+          <div>
+            <div class="learning-stat-value">—</div>
+            <div class="learning-stat-label">Last Updated</div>
+          </div>
+        </div>
+        
+      </div>
+    </div>
+    
+    <!-- Cover Letters Tab -->
+    <div id="cover-letters-tab" class="tab-content">
+      <div class="page-header">
+        <h2 class="page-title">Saved Cover Letters</h2>
+        <p class="page-subtitle">Your generated cover letters for future reference</p>
+      </div>
+      
+      <div class="card">
+        <div id="cover-letters-list">
+          <div class="empty-state">
+            <div class="empty-state-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+                <polyline points="22,6 12,13 2,6"/>
+              </svg>
+            </div>
+            <h3>No cover letters saved</h3>
+            <p>Generate a cover letter on a job page and it will appear here.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+  
+  <script src="options.js"></script>
+</body>
+</html>

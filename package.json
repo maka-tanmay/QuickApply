@@ -1,0 +1,23 @@
+{
+  "name": "jobright-ai",
+  "version": "1.0.0",
+  "description": "AI-powered auto-fill for job applications",
+  "scripts": {
+    "build": "tsc && npm run copy-assets",
+    "copy-assets": "mkdir -p dist && cp -r icons dist/ 2>/dev/null || true",
+    "watch": "tsc --watch",
+    "dev": "npm run watch",
+    "verify": "node verify-build.js"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.0.268",
+    "@types/react": "^18.2.66",
+    "@types/react-dom": "^18.2.18",
+    "typescript": "^5.3.3"
+  },
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  }
+}
+

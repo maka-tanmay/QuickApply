@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Generate JobRight AI Icons</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      max-width: 600px;
+      margin: 50px auto;
+      padding: 20px;
+      text-align: center;
+    }
+    canvas {
+      border: 1px solid #ddd;
+      margin: 10px;
+      display: block;
+    }
+    button {
+      background: #4F46E5;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 6px;
+      font-size: 16px;
+      cursor: pointer;
+      margin: 10px;
+    }
+    button:hover {
+      background: #4338CA;
+    }
+    .status {
+      margin: 20px 0;
+      padding: 15px;
+      background: #d1fae5;
+      border-radius: 6px;
+      color: #065f46;
+    }
+  </style>
+</head>
+<body>
+  <h1>JobRight AI Icon Generator</h1>
+  <p>Click the button below to generate and download all three icon sizes.</p>
+  
+  <div id="canvases"></div>
+  
+  <button onclick="generateAndDownloadAll()">Generate & Download All Icons</button>
+  
+  <div id="status"></div>
+
+  <script>
+    const sizes = [16, 48, 128];
+    
+    function createIcon(size) {
+      const canvas = document.createElement('canvas');
+      canvas.width = size;
+      canvas.height = size;
+      canvas.id = `icon${size}`;
+      canvas.style.width = `${size * 4}px`;
+      canvas.style.height = `${size * 4}px`;
+      canvas.style.imageRendering = 'pixelated';
+      
+      const ctx = canvas.getContext('2d');
+      
+      // Create gradient background
+      const gradient = ctx.createLinearGradient(0, 0, size, size);
+      gradient.addColorStop(0, '#4F46E5');
+      gradient.addColorStop(1, '#7C3AED');
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, size, size);
+      
+      // Add a subtle border
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+      ctx.lineWidth = Math.max(1, size / 32);
+      ctx.strokeRect(0, 0, size, size);
+      
+      // Draw white "J" letter
+      ctx.fillStyle = 'white';
+      ctx.font = `bold ${Math.floor(size * 0.65)}px Arial`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      
+      // Add text shadow for better visibility
+      ctx.shadowColor = 'rgba(0, 0, 0, 0.3)';
+      ctx.shadowBlur = size / 16;
+      ctx.shadowOffsetX = size / 32;
+      ctx.shadowOffsetY = size / 32;
+      
+      ctx.fillText('J', size / 2, size / 2);
+      
+      // Reset shadow
+      ctx.shadowColor = 'transparent';
+      ctx.shadowBlur = 0;
+      ctx.shadowOffsetX = 0;
+      ctx.shadowOffsetY = 0;
+      
+      return canvas;
+    }
+    
+    function downloadCanvas(canvas, filename) {
+      canvas.toBlob(function(blob) {
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.download = filename;
+        link.href = url;
+        link.click();
+        URL.revokeObjectURL(url);
+      }, 'image/png');
+    }
+    
+    function generateAndDownloadAll() {
+      const statusDiv = document.getElementById('status');
+      statusDiv.innerHTML = '<div class="status">Generating icons...</div>';
+      
+      let downloaded = 0;
+      
+      sizes.forEach((size, index) => {
+        setTimeout(() => {
+          const canvas = createIcon(size);
+          const filename = `icon${size}.png`;
+          
+          // Show preview
+          const container = document.getElementById('canvases');
+          const existing = document.getElementById(`icon${size}`);
+          if (existing) {
+            container.removeChild(existing);
+          }
+          container.appendChild(canvas);
+          
+          // Download
+          downloadCanvas(canvas, filename);
+          downloaded++;
+          
+          if (downloaded === sizes.length) {
+            statusDiv.innerHTML = `
+              <div class="status">
+                <strong>✅ Success!</strong><br>
+                All ${sizes.length} icons have been downloaded.<br>
+                <small>Move them to the <code>icons/</code> folder in your extension directory.</small>
+              </div>
+            `;
+          }
+        }, index * 300); // Stagger downloads
+      });
+    }
+    
+    // Generate previews on load
+    window.onload = function() {
+      const container = document.getElementById('canvases');
+      sizes.forEach(size => {
+        const canvas = createIcon(size);
+        container.appendChild(canvas);
+      });
+    };
+  </script>
+</body>
+</html>
+
