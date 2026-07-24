@@ -63,6 +63,9 @@ interface Suggestion {
   confidence: number;
   source: string;
   skipAutoFill?: boolean;
+  prevValue?: string;   // value before we filled, for Undo
+  undoable?: boolean;
+  mask?: boolean;       // credential — render as dots, never editable, never sent to AI
 }
 
 let currentProfile: UserProfile | null = null;
@@ -96,13 +99,14 @@ async function init() {
       console.log('JobRight AI: Profile loaded:', currentProfile?.name);
     }
 
-    // Only auto-scan if extension is enabled (commented out for now - manual scan preferred)
-    // setTimeout(() => {
-    //   if (currentProfile && extensionEnabled) {
-    //     scanPage();
-    //   }
-    // }, 2000);
-    
+    await loadAccountCreds();
+
+    // Auto-scan on recognized ATS pages (Workday, Greenhouse, ...) so the user
+    // never has to open the popup. Off via the popup's Auto-scan toggle.
+    if (currentProfile && extensionEnabled && settings.autoScan !== false && currentATS) {
+      setTimeout(() => scanPage(true), 300);
+    }
+
   } catch (error) {
     console.error('JobRight AI: Init error:', error);
   }
@@ -178,7 +182,8 @@ async function handleScan() {
   if (profileId) {
     currentProfile = await sendMessage({ type: 'getProfile', profileId });
   }
-  
+  await loadAccountCreds();
+
   // Reload AI and extension settings
   const settings = await sendMessage({ type: 'getSettings' });
   aiEnabled = settings.aiEnabled && settings.hasApiKey;
@@ -198,9 +203,62 @@ async function handleScan() {
   return { success: true };
 }
 
-async function scanPage() {
+// Re-scan automatically when an SPA (Workday's multi-step flow, Greenhouse, etc.)
+// swaps in a new step without a page load. Only after the user has scanned once,
+// so the overlay never appears uninvited.
+let hasScanned = false;
+let lastScanUrl = '';
+let rescanTimer: number | undefined;
+let autoScanRetries = 0;
+
+// ===== ATS account credentials (Workday & co. force an account per company).
+// Stored in chrome.storage.local via Options -> ATS Account; never hardcoded.
+let accountCreds = { email: '', password: '' };
+let accountRegistry: Record<string, { email: string; createdAt: number }> = {};
+let usingSavedAccountFor: string | null = null;
+
+function accountDomainKey(): string {
+  return location.hostname.replace(/^www\./, '');
+}
+
+async function loadAccountCreds() {
+  try {
+    const acc = await chrome.storage.local.get(['qaAccountEmail', 'qaAccountPassword', 'qaAccounts']);
+    accountCreds = { email: acc.qaAccountEmail || '', password: acc.qaAccountPassword || '' };
+    accountRegistry = acc.qaAccounts || {};
+  } catch (e) {}
+}
+
+// After credentials are actually filled on this domain, remember the account
+// so future visits show "saved login" instead of creating a duplicate.
+function registerAccountIfNeeded(suggestion: Suggestion) {
+  if (!suggestion.mask || !accountCreds.email) return;
+  const key = accountDomainKey();
+  if (!accountRegistry[key]) {
+    accountRegistry[key] = { email: accountCreds.email, createdAt: Date.now() };
+    try { chrome.storage.local.set({ qaAccounts: accountRegistry }); } catch (e) {}
+  }
+}
+
+function watchForSpaNavigation() {
+  lastScanUrl = location.href;
+  new MutationObserver(() => {
+    if (location.href !== lastScanUrl) {
+      lastScanUrl = location.href;
+      if (!hasScanned || !extensionEnabled || !currentProfile) return;
+      clearTimeout(rescanTimer);
+      // Short settle; scanPage(true) retries on its own if the step hasn't rendered yet
+      rescanTimer = window.setTimeout(() => scanPage(true), 600);
+    }
+  }).observe(document.documentElement, { subtree: true, childList: true });
+}
+watchForSpaNavigation();
+
+async function scanPage(auto = false) {
   console.log('JobRight AI: Scanning page...');
-  
+  hasScanned = true;
+  lastScanUrl = location.href;
+
   const fields = findFormFields();
   console.log('JobRight AI: Found', fields.length, 'fields');
   
@@ -209,30 +267,27 @@ async function scanPage() {
     console.log('JobRight AI: Field:', f.type, '|', f.label.substring(0, 50));
   });
   
-  if (fields.length === 0) {
-    showMessage('No form fields found. Trying advanced detection...', 'info');
-    
-    // Try again with more aggressive detection
-    setTimeout(async () => {
-      const advancedFields = findFormFieldsAdvanced();
-      console.log('JobRight AI: Advanced scan found', advancedFields.length, 'fields');
-      
-      if (advancedFields.length === 0) {
-        showMessage('No form fields detected. The page may use unsupported form components.', 'warning');
-      } else {
-        showMessage(aiEnabled ? '🤖 AI analyzing questions...' : 'Matching fields...', 'info');
-        suggestions = await generateSuggestions(advancedFields);
-        showOverlay();
+  let effectiveFields = fields;
+  if (effectiveFields.length === 0) {
+    effectiveFields = findFormFieldsAdvanced();
+    console.log('JobRight AI: Advanced scan found', effectiveFields.length, 'fields');
+  }
+
+  if (effectiveFields.length === 0) {
+    if (auto) {
+      // SPA still hydrating — retry briefly instead of giving up
+      if (autoScanRetries < 4) {
+        autoScanRetries++;
+        setTimeout(() => scanPage(true), 800);
       }
-    }, 500);
+    } else {
+      showEmptyState();
+    }
     return;
   }
-  
-  if (aiEnabled) {
-    showMessage('🤖 AI analyzing questions...', 'info');
-  }
-  
-  suggestions = await generateSuggestions(fields);
+  autoScanRetries = 0;
+
+  suggestions = await generateSuggestions(effectiveFields);
   showOverlay();
 }
 
@@ -947,13 +1002,48 @@ function getLabel(el: HTMLElement): string {
   return el.getAttribute('name') || el.id || 'Unknown field';
 }
 
+// ===== Answer cache: application questions repeat, so an AI answer is paid for
+// once and instant forever after. Persisted in chrome.storage.local. =====
+let answerCache: Record<string, { value: string; ts: number }> = {};
+let answerCacheLoaded = false;
+let pendingAIFields: DetectedField[] = [];
+
+// Only free-text fields can be essays — a dropdown matching "this position"
+// is still a dropdown and must use normal matching.
+function isEssayField(field: DetectedField): boolean {
+  return field.type === 'textarea' || (field.type === 'text' && isOpenEndedQuestionLabel(field.label));
+}
+
+function answerCacheKey(label: string): string {
+  return label.toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim().slice(0, 120);
+}
+
+async function loadAnswerCache() {
+  if (answerCacheLoaded) return;
+  try {
+    const res = await chrome.storage.local.get('qaAnswerCache');
+    answerCache = res.qaAnswerCache || {};
+  } catch (e) {
+    answerCache = {};
+  }
+  answerCacheLoaded = true;
+}
+
+function saveAnswerToCache(label: string, value: string) {
+  answerCache[answerCacheKey(label)] = { value, ts: Date.now() };
+  try { chrome.storage.local.set({ qaAnswerCache: answerCache }); } catch (e) {}
+}
+
+// Local-only, no awaited AI: the overlay must render instantly. Fields that
+// genuinely need Claude go to pendingAIFields and resolve in the background.
 async function generateSuggestions(fields: DetectedField[]): Promise<Suggestion[]> {
   if (!currentProfile) return [];
-  
+  await loadAnswerCache();
+
   const result: Suggestion[] = [];
-  missingFields = []; // Reset missing fields
-  
-  // Get learned mappings for this domain
+  missingFields = [];
+  pendingAIFields = [];
+
   const domain = window.location.hostname;
   let learnedMappings: Array<{ pattern: string; value: string }> = [];
   try {
@@ -961,49 +1051,66 @@ async function generateSuggestions(fields: DetectedField[]): Promise<Suggestion[
   } catch (e) {
     console.log('JobRight AI: Could not load learned mappings');
   }
-  
+
+  // Account walls: a page with a password field is a create-account or sign-in
+  // page. Credentials come ONLY from the ATS Account store, never from AI.
+  const pageHasPassword = fields.some(f => f.type === 'password');
+  const savedAccount = accountRegistry[accountDomainKey()];
+  usingSavedAccountFor = pageHasPassword && savedAccount ? accountDomainKey() : null;
+
   for (const field of fields) {
-    let suggestion: Suggestion | null = null;
-    
-    // FIRST: Check if this is an open-ended question that should ONLY use AI
-    // Check BEFORE regular matching to prevent wrong matches
-    const isOpenEndedQuestion = field.type === 'textarea' || isOpenEndedQuestionLabel(field.label);
-    
-    if (isOpenEndedQuestion && aiEnabled && field.label.length > 10) {
-      // For open-ended questions, skip regular matching entirely and use AI
-      console.log('JobRight AI: Detected open-ended question, using AI directly:', field.label.substring(0, 50));
-      suggestion = await generateAIAnswerForField(field);
-    } else {
-      // For regular fields, use the normal matching flow
-      
-      // First check for learned mappings (user corrections)
-      suggestion = checkLearnedMapping(field, learnedMappings);
-      
-      // Try regular matching if no learned mapping
-      if (!suggestion) {
-        suggestion = matchField(field);
+    if (field.type === 'password') {
+      if (accountCreds.password) {
+        result.push({
+          field, value: accountCreds.password, confidence: 0.97,
+          source: savedAccount ? 'account · saved login' : 'account · new',
+          mask: true
+        });
+      } else {
+        missingFields.push({ label: field.label || 'Password', suggestedKey: 'Account password — Settings → ATS Account' });
       }
-      
-      // If no match and AI is enabled, try AI matching
-      if (!suggestion && aiEnabled && field.label.length > 5) {
-        suggestion = await tryAIMatch(field);
-      }
+      continue;
     }
-    
+    if (pageHasPassword && accountCreds.email && /e-?mail|user.?name|login/i.test(`${field.label} ${field.name}`)) {
+      result.push({
+        field, value: accountCreds.email, confidence: 0.97,
+        source: savedAccount ? 'account · saved login' : 'account'
+      });
+      continue;
+    }
+    const isOpenEndedQuestion = isEssayField(field);
+    const cached = answerCache[answerCacheKey(field.label)];
+
+    let suggestion = checkLearnedMapping(field, learnedMappings) || matchField(field);
+
+    // Essay questions must come from the answers bank, a learned correction,
+    // or Claude — a generic pattern match would be a wrong essay.
+    if (isOpenEndedQuestion && suggestion &&
+        !suggestion.source.startsWith('answers.') && !suggestion.source.includes('Learned')) {
+      suggestion = null;
+    }
+
+    if (!suggestion && cached) {
+      suggestion = { field, value: cached.value, confidence: 0.88, source: 'Claude · cached' };
+    }
+
     if (suggestion) {
       result.push(suggestion);
+      continue;
+    }
+
+    const combined = `${field.label} ${field.name}`.toLowerCase();
+    const aiEligible = aiEnabled && field.label.length > (isOpenEndedQuestion ? 10 : 5) &&
+      !isSensitiveField(combined) && !isDirectProfileField(combined);
+
+    if (aiEligible) {
+      pendingAIFields.push(field); // answered in parallel after the overlay shows
     } else if (field.label.length > 3) {
-      // Track as missing field
       const suggestedKey = detectMissingFieldKey(field.label, field.name);
-      if (suggestedKey) {
-        missingFields.push({
-          label: field.label,
-          suggestedKey
-        });
-      }
+      if (suggestedKey) missingFields.push({ label: field.label, suggestedKey });
     }
   }
-  
+
   return result;
 }
 
@@ -1028,7 +1135,7 @@ function checkLearnedMapping(
         field,
         value: mapping.value,
         confidence: 0.98,
-        source: '🧠 Learned'
+        source: 'Learned'
       };
     }
   }
@@ -1124,7 +1231,7 @@ async function tryAIMatch(field: DetectedField): Promise<Suggestion | null> {
         field,
         value: result.answer,
         confidence: result.confidence,
-        source: `🤖 AI: ${result.field_key}`,
+        source: `Claude · ${result.field_key}`,
       };
     }
   } catch (error) {
@@ -1212,7 +1319,7 @@ async function generateAIAnswerForField(field: DetectedField): Promise<Suggestio
         field,
         value: answer,
         confidence: 0.9,
-        source: '🤖 AI Generated'
+        source: 'Claude'
       };
     }
   } catch (error) {
@@ -1345,10 +1452,11 @@ function matchField(field: DetectedField): Suggestion | null {
     { regex: [/additional.*info/i, /anything.*else/i, /like.*add/i, /want.*know/i, /other.*info/i], value: () => getAnswerValue('additional') || '', source: 'answers.additional', confidence: 0.75 },
   ];
   
-  // Try pattern matching
+  // Try pattern matching. Test label and name individually too — anchored
+  // patterns like /^country$/ can never match the concatenated string.
   for (const pattern of patterns) {
     for (const regex of pattern.regex) {
-      if (regex.test(combined)) {
+      if (regex.test(combined) || regex.test(label) || regex.test(name)) {
         const value = typeof pattern.value === 'function' ? pattern.value() : pattern.value;
         if (value) {
           return {
@@ -1588,323 +1696,422 @@ function isDirectProfileField(text: string): boolean {
   return directPatterns.some(p => p.test(text));
 }
 
+// ===== QuickApply design system (dark, lime accent) — see DESIGN_BRIEF.md =====
+const QA_SVG = {
+  minus: '<svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M3.5 8h9"></path></svg>',
+  close: '<svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M4 4l8 8M12 4l-8 8"></path></svg>',
+  check: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#c9f24d" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M13.5 4.5L6.2 11.8 2.8 8.4"></path></svg>',
+  checkSmall: '<svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="#c9f24d" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M13.5 4.5L6.2 11.8 2.8 8.4"></path></svg>',
+  sparkle: '<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="#a78bfa" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2l1.6 4.4L14 8l-4.4 1.6L8 14l-1.6-4.4L2 8l4.4-1.6z"></path></svg>',
+  search: '<svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="#8a8a86" stroke-width="1.6" stroke-linecap="round"><circle cx="9" cy="9" r="6"></circle><path d="M13.5 13.5L17 17"></path></svg>',
+};
+
+const QA_CSS = `
+#jobright-overlay { position:fixed; top:20px; right:20px; width:400px; z-index:2147483647; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; }
+#jobright-overlay * { box-sizing:border-box; margin:0; }
+@keyframes qaRise { from { opacity:0; transform:translateY(8px) scale(.99) } to { opacity:1; transform:none } }
+@keyframes qaPop { from { opacity:0; transform:translateY(10px) scale(.94) } to { opacity:1; transform:none } }
+.qa-panel { display:flex; flex-direction:column; max-height:85vh; background:#131312; border:1px solid #2e2e2b; border-radius:16px; box-shadow:0 28px 60px -20px rgba(0,0,0,.75); overflow:hidden; animation:qaRise .2s ease-out; }
+.qa-pill { display:none; position:fixed; bottom:22px; right:22px; align-items:center; gap:10px; background:#131312; border:1px solid #2e2e2b; border-radius:999px; padding:9px 15px 9px 11px; cursor:pointer; font-family:inherit; box-shadow:0 18px 40px -14px rgba(0,0,0,.7); animation:qaPop .22s cubic-bezier(.2,.9,.3,1.2); }
+.qa-pill:hover { border-color:#43433f; }
+#jobright-overlay.jr-min .qa-panel { display:none; }
+#jobright-overlay.jr-min .qa-pill { display:flex; }
+.qa-logo { width:24px; height:24px; border-radius:8px; background:#c9f24d; color:#0b1004; font-size:13px; font-weight:700; display:flex; align-items:center; justify-content:center; flex:none; }
+.qa-header { display:flex; align-items:center; gap:10px; padding:12px 12px 12px 14px; border-bottom:1px solid #242423; }
+.qa-title { font-size:14.5px; font-weight:600; color:#f4f4f2; letter-spacing:-.01em; flex:1; }
+.qa-iconbtn { width:28px; height:28px; display:flex; align-items:center; justify-content:center; border:none; background:transparent; border-radius:8px; cursor:pointer; color:#9d9d98; padding:0; }
+.qa-iconbtn:hover { background:#212120; color:#f4f4f2; }
+.qa-profile { display:flex; align-items:center; gap:8px; padding:9px 14px; background:#171716; border-bottom:1px solid #242423; }
+.qa-dim { font-size:12px; color:#8a8a86; }
+.qa-profile-name { font-size:12px; font-weight:600; color:#e6e6e1; }
+.qa-spacer { flex:1; }
+.qa-link { font-size:12px; color:#c9f24d; font-weight:600; cursor:pointer; }
+.qa-status { padding:12px 14px; display:flex; align-items:center; gap:9px; border-bottom:1px solid #242423; }
+.qa-status.post { flex-direction:column; align-items:stretch; gap:8px; background:rgba(201,242,77,.06); }
+.qa-status-row { display:flex; align-items:center; gap:9px; }
+.qa-status-dot { width:7px; height:7px; border-radius:999px; background:#c9f24d; flex:none; box-shadow:0 0 0 4px rgba(201,242,77,.16); }
+.qa-status-strong { font-size:13px; font-weight:600; color:#f4f4f2; }
+.qa-amber { color:#f0b429; font-weight:600; font-size:13px; }
+.qa-dim12 { font-size:12px; color:#8a8a86; }
+.qa-bar { height:5px; border-radius:999px; background:#242423; overflow:hidden; display:flex; }
+.qa-bar .ok { background:#c9f24d; }
+.qa-bar .warn { background:#f0b429; }
+.qa-tabs { display:flex; gap:6px; padding:10px 12px 2px; }
+.qa-tab { font-family:inherit; font-size:12.5px; font-weight:600; color:#9d9d98; background:transparent; border:1px solid #2e2e2b; border-radius:999px; padding:7px 14px; cursor:pointer; }
+.qa-tab:hover { color:#f4f4f2; border-color:#43433f; }
+.qa-tab.active { color:#0b1004; background:#c9f24d; border-color:#c9f24d; }
+.qa-body { flex:1; overflow:auto; padding:10px 12px 14px; display:flex; flex-direction:column; gap:8px; min-height:210px; }
+.qa-tab-content { display:none; flex-direction:column; gap:8px; }
+.qa-tab-content.active { display:flex; }
+.qa-card { border:1px solid #2a2a28; border-radius:13px; padding:12px 13px; display:flex; flex-direction:column; gap:9px; background:#181817; cursor:pointer; transition:border-color .14s; }
+.qa-card:hover { border-color:#43433f; }
+.qa-card.filled { border-color:rgba(201,242,77,.3); background:rgba(201,242,77,.07); }
+.qa-card.failed { border-color:rgba(240,180,41,.32); background:rgba(240,180,41,.07); }
+.qa-card-top { display:flex; align-items:flex-start; gap:8px; }
+.qa-q { flex:1; font-size:13px; line-height:1.4; font-weight:500; color:#eaeae5; overflow:hidden; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; }
+.qa-badge { font-size:10.5px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:#9d9d98; background:#242423; border-radius:6px; padding:3px 7px; flex:none; }
+.qa-badge.custom, .qa-card.failed .qa-badge { color:#f0b429; background:rgba(240,180,41,.14); }
+.qa-card-check { display:none; flex:none; margin-top:1px; }
+.qa-card.filled .qa-badge { display:none; }
+.qa-card.filled .qa-card-check { display:block; }
+.qa-answer { font-size:13px; line-height:1.5; color:#c4c4bf; background:#1f1f1d; border:1px solid #2a2a28; border-radius:9px; padding:8px 10px; outline:none; }
+.qa-answer:focus { border:1.5px solid #c9f24d; background:#131312; color:#f4f4f2; }
+.qa-card.filled .qa-answer, .qa-card.failed .qa-answer { background:transparent; border-color:transparent; padding:0; }
+.qa-card.failed .qa-answer { font-size:12.5px; color:#d8c79b; }
+.qa-card-meta { display:flex; align-items:center; gap:8px; }
+.qa-dot { width:6px; height:6px; border-radius:999px; flex:none; background:#c9f24d; }
+.qa-dot.med { background:#b3d94a; opacity:.7; }
+.qa-dot.low { background:#f0b429; }
+.qa-card.failed .qa-dot { background:#f0b429; opacity:1; }
+.qa-card.filled .qa-dot { background:#c9f24d; opacity:1; }
+.qa-conf { font-size:11.5px; font-weight:600; color:#9d9d98; }
+.qa-card.filled .qa-conf { color:#c9f24d; }
+.qa-card.failed .qa-conf { color:#f0b429; }
+.qa-metadim { font-size:11.5px; color:#8a8a86; }
+.qa-action { font-size:11.5px; font-weight:600; color:#7c7c78; cursor:pointer; }
+.qa-card.filled .qa-action { color:#9d9d98; }
+.qa-card.failed .qa-action { color:#e6e6e1; }
+.qa-missing-note { font-size:12px; line-height:1.55; color:#8a8a86; padding:0 2px 2px; }
+.qa-key { font-size:11px; font-family:ui-monospace,Menlo,monospace; color:#c9f24d; background:rgba(201,242,77,.1); border-radius:6px; padding:4px 7px; }
+.qa-key.ai { color:#a78bfa; background:#241d3a; }
+.qa-add { font-size:12px; font-weight:600; color:#c9f24d; cursor:pointer; }
+.qa-add.ai { color:#a78bfa; }
+.qa-footer { border-top:1px solid #242423; padding:12px; display:flex; flex-direction:column; gap:10px; background:#131312; }
+.qa-actions { display:flex; gap:8px; }
+.qa-btn-primary { font-family:inherit; flex:1; font-size:13.5px; font-weight:700; color:#0b1004; background:#c9f24d; border:none; border-radius:999px; padding:12px; cursor:pointer; }
+.qa-btn-primary:hover { background:#d8ff63; }
+.qa-btn-ghost { font-family:inherit; font-size:13.5px; font-weight:600; color:#9d9d98; background:transparent; border:1px solid #2e2e2b; border-radius:999px; padding:12px 18px; cursor:pointer; }
+.qa-btn-ghost:hover { color:#f4f4f2; border-color:#43433f; }
+.qa-btn-secondary { font-family:inherit; font-size:13px; font-weight:600; color:#e6e6e1; background:#1e1e1c; border:1px solid #2e2e2b; border-radius:999px; padding:10px; cursor:pointer; }
+.qa-btn-secondary:hover { background:#262624; }
+.qa-ai { display:flex; align-items:center; gap:10px; padding:10px 11px; border:1px solid #2b2540; background:#1a172a; border-radius:12px; }
+.qa-ai-icon { width:22px; height:22px; border-radius:7px; background:#241d3a; display:flex; align-items:center; justify-content:center; flex:none; }
+.qa-ai-text { flex:1; display:flex; flex-direction:column; gap:1px; }
+.qa-ai-title { font-size:12.5px; font-weight:600; color:#e9e6f7; }
+.qa-ai-sub { font-size:11.5px; color:#9a92b8; }
+.qa-ai-btn { font-family:inherit; font-size:12px; font-weight:600; color:#e9e6f7; background:#2b2540; border:none; border-radius:999px; padding:7px 12px; cursor:pointer; }
+.qa-ai-btn:hover { background:#372f52; }
+.qa-pill-name { font-size:13px; font-weight:600; color:#f4f4f2; }
+.qa-pill-count { font-size:12px; font-weight:700; color:#0b1004; background:#c9f24d; border-radius:999px; padding:2px 8px; }
+.qa-pill-logo { width:22px; height:22px; border-radius:7px; background:#c9f24d; color:#0b1004; font-size:12px; font-weight:700; display:flex; align-items:center; justify-content:center; }
+.qa-empty { display:flex; flex-direction:column; align-items:center; gap:10px; text-align:center; padding:26px 20px; background:#131312; border:1px solid #2e2e2b; border-radius:16px; box-shadow:0 28px 60px -20px rgba(0,0,0,.75); animation:qaRise .2s ease-out; }
+.qa-empty-icon { width:38px; height:38px; border-radius:12px; background:#1f1f1d; border:1px solid #2e2e2b; display:flex; align-items:center; justify-content:center; }
+.qa-empty-title { font-size:13.5px; font-weight:600; color:#f4f4f2; }
+.qa-empty-sub { font-size:12.5px; line-height:1.55; color:#8a8a86; max-width:30ch; }
+`;
+
+function qaConf(confidence: number): { label: string; cls: string } {
+  if (confidence >= 0.9) return { label: 'High', cls: '' };
+  if (confidence >= 0.75) return { label: 'Medium', cls: 'med' };
+  return { label: 'Low — check me', cls: 'low' };
+}
+
+function buildCardHtml(s: Suggestion, i: number): string {
+  const conf = qaConf(s.confidence);
+  const answerHtml = s.mask
+    ? `<div class="qa-answer">••••••••••</div>`
+    : `<div class="qa-answer" contenteditable="true" data-original="${escapeHtml(s.value)}">${escapeHtml(s.value)}</div>`;
+  return `
+    <div class="qa-card" data-index="${i}">
+      <div class="qa-card-top">
+        <div class="qa-q" title="${escapeHtml(s.field.label)}">${escapeHtml(truncate(s.field.label, 110))}</div>
+        <span class="qa-badge${s.field.isCustom ? ' custom' : ''}">${s.field.isCustom ? 'custom' : escapeHtml(s.field.type)}</span>
+        <span class="qa-card-check">${QA_SVG.check}</span>
+      </div>
+      ${answerHtml}
+      <div class="qa-card-meta">
+        <span class="qa-dot ${conf.cls}"></span>
+        <span class="qa-conf">${conf.label}</span>
+        <span class="qa-metadim">· ${escapeHtml(s.source)}</span>
+        <span class="qa-spacer"></span>
+        <span class="qa-action">Click to fill</span>
+      </div>
+    </div>`;
+}
+
 function showOverlay() {
   const existing = document.getElementById('jobright-overlay');
   if (existing) existing.remove();
-  
+
   const fillable = suggestions.filter(s => !s.skipAutoFill && s.value);
-  
-  // Show overlay if there are either fillable suggestions OR missing fields
-  if (fillable.length === 0 && missingFields.length === 0) {
-    showMessage('No form fields detected on this page.', 'info');
+
+  if (fillable.length === 0 && missingFields.length === 0 && pendingAIFields.length === 0) {
+    showEmptyState();
     return;
   }
-  
-  // If only missing fields, show a helpful message and the overlay
-  if (fillable.length === 0 && missingFields.length > 0) {
-    console.log('JobRight AI: No fillable suggestions, but found', missingFields.length, 'missing fields');
-  }
-  
+
   const overlay = document.createElement('div');
   overlay.id = 'jobright-overlay';
-  overlay.innerHTML = `
-    <style>
-      #jobright-overlay {
-        position: fixed;
-        top: 20px;
-        right: 20px;
-        width: 400px;
-        max-height: 85vh;
-        background: white;
-        border-radius: 12px;
-        box-shadow: 0 8px 32px rgba(0,0,0,0.2);
-        z-index: 2147483647;
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-        overflow: hidden;
-      }
-      .jr-header {
-        background: linear-gradient(135deg, #4F46E5, #7C3AED);
-        color: white;
-        padding: 16px;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-      }
-      .jr-header h3 { margin: 0; font-size: 16px; }
-      .jr-close {
-        background: rgba(255,255,255,0.2);
-        border: none;
-        color: white;
-        width: 28px;
-        height: 28px;
-        border-radius: 50%;
-        cursor: pointer;
-        font-size: 18px;
-      }
-      .jr-profile {
-        padding: 8px 16px;
-        background: #f0fdf4;
-        border-bottom: 1px solid #e2e8f0;
-        font-size: 12px;
-        color: #166534;
-      }
-      .jr-stats {
-        padding: 8px 16px;
-        background: #f8fafc;
-        border-bottom: 1px solid #e2e8f0;
-        font-size: 12px;
-        color: #64748b;
-      }
-      .jr-tabs {
-        display: flex;
-        border-bottom: 1px solid #e2e8f0;
-      }
-      .jr-tab {
-        flex: 1;
-        padding: 10px;
-        border: none;
-        background: #f8fafc;
-        cursor: pointer;
-        font-size: 12px;
-        font-weight: 500;
-        color: #64748b;
-        transition: all 0.2s;
-      }
-      .jr-tab:hover { background: #f1f5f9; }
-      .jr-tab.active {
-        background: white;
-        color: #4F46E5;
-        border-bottom: 2px solid #4F46E5;
-      }
-      .jr-tab-content { display: none; }
-      .jr-tab-content.active { display: block; }
-      .jr-missing-item {
-        padding: 10px 12px;
-        border-bottom: 1px solid #f1f5f9;
-        font-size: 12px;
-      }
-      .jr-missing-item:last-child { border-bottom: none; }
-      .jr-missing-label { color: #64748b; margin-bottom: 4px; }
-      .jr-missing-key { 
-        color: #f59e0b; 
-        font-weight: 500;
-        background: #fffbeb;
-        padding: 2px 6px;
-        border-radius: 4px;
-        display: inline-block;
-      }
-      .jr-body {
-        max-height: 45vh;
-        overflow-y: auto;
-        padding: 8px;
-      }
-      .jr-item {
-        background: #f8fafc;
-        border: 1px solid #e2e8f0;
-        border-radius: 8px;
-        padding: 12px;
-        margin-bottom: 8px;
-        cursor: pointer;
-        transition: all 0.2s;
-      }
-      .jr-item:hover { border-color: #4F46E5; background: #f1f5f9; }
-      .jr-item.filled { background: #dcfce7; border-color: #22c55e; }
-      .jr-item.custom { border-left: 3px solid #f59e0b; }
-      .jr-label {
-        font-size: 12px;
-        color: #64748b;
-        margin-bottom: 4px;
-        display: flex;
-        justify-content: space-between;
-        gap: 8px;
-      }
-      .jr-label-text {
-        flex: 1;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-      }
-      .jr-type {
-        background: #e2e8f0;
-        padding: 2px 6px;
-        border-radius: 4px;
-        font-size: 10px;
-        white-space: nowrap;
-      }
-      .jr-value {
-        font-size: 14px;
-        color: #1e293b;
-        font-weight: 500;
-      }
-      .jr-confidence {
-        display: inline-block;
-        background: #dcfce7;
-        color: #166534;
-        font-size: 10px;
-        padding: 2px 6px;
-        border-radius: 4px;
-        margin-top: 4px;
-      }
-      .jr-actions {
-        padding: 12px;
-        border-top: 1px solid #e2e8f0;
-        display: flex;
-        gap: 8px;
-      }
-      .jr-btn {
-        flex: 1;
-        padding: 12px;
-        border: none;
-        border-radius: 8px;
-        font-size: 14px;
-        font-weight: 600;
-        cursor: pointer;
-      }
-      .jr-btn-primary { background: #4F46E5; color: white; }
-      .jr-btn-primary:hover { background: #4338ca; }
-      .jr-btn-secondary { background: #f1f5f9; color: #475569; }
-    </style>
-    <div class="jr-header">
-      <h3>🚀 JobRight AI</h3>
-      <button class="jr-close" id="jr-close">×</button>
-    </div>
-    <div class="jr-profile">
-      Profile: <strong>${escapeHtml(currentProfile?.name || 'Unknown')}</strong>
-    </div>
-    <div class="jr-stats">
-      ✅ ${fillable.length} ready to fill ${missingFields.length > 0 ? `• ⚠️ ${missingFields.length} missing` : ''}
-    </div>
-    <div class="jr-tabs">
-      <button class="jr-tab active" data-tab="suggestions">Suggestions</button>
-      <button class="jr-tab" data-tab="missing">Missing (${missingFields.length})</button>
-    </div>
-    <div class="jr-body" id="jr-body">
-      <div class="jr-tab-content active" id="jr-tab-suggestions">
-        ${fillable.length === 0 ? `
-          <div style="padding: 20px; text-align: center; color: #64748b;">
-            <div style="font-size: 32px; margin-bottom: 8px;">🤷</div>
-            <div>No matches found</div>
-            <div style="font-size: 12px; margin-top: 4px;">Check the Missing tab to see what fields to add</div>
-          </div>
-        ` : fillable.map((s, i) => `
-          <div class="jr-item ${s.field.isCustom ? 'custom' : ''}" data-index="${i}">
-            <div class="jr-label">
-              <span class="jr-label-text" title="${escapeHtml(s.field.label)}">${escapeHtml(truncate(s.field.label, 40))}</span>
-              <span class="jr-type">${s.field.isCustom ? '🎯 custom' : s.field.type}</span>
-            </div>
-            <div class="jr-value" contenteditable="true" data-original="${escapeHtml(s.value)}" data-field-index="${i}">${escapeHtml(s.value)}</div>
-            <span class="jr-confidence">${Math.round(s.confidence * 100)}% • ${s.source}</span>
-          </div>
-        `).join('')}
+
+  const cardsHtml = (fillable.length === 0 && pendingAIFields.length === 0 ? `
+    <div class="qa-missing-note">No matches yet — the Missing tab shows what to add to your profile.</div>
+  ` : fillable.map((s, i) => buildCardHtml(s, i)).join('')) +
+  pendingAIFields.map((f, pi) => `
+    <div class="qa-card" data-pending-id="${pi}" style="cursor:default">
+      <div class="qa-card-top">
+        <div class="qa-q" title="${escapeHtml(f.label)}">${escapeHtml(truncate(f.label, 110))}</div>
+        <span class="qa-badge">${escapeHtml(f.type)}</span>
       </div>
-      <div class="jr-tab-content" id="jr-tab-missing">
-        ${missingFields.length === 0 ? `
-          <div style="padding: 20px; text-align: center; color: #22c55e;">
-            ✓ No missing fields! Your profile covers all questions.
-          </div>
-        ` : `
-          <div style="padding: 8px 12px; background: #fffbeb; font-size: 11px; color: #92400e;">
-            💡 Add these to your profile for better auto-fill:
-          </div>
-          ${missingFields.map(m => `
-            <div class="jr-missing-item">
-              <div class="jr-missing-label">${escapeHtml(truncate(m.label, 50))}</div>
-              <span class="jr-missing-key">→ Add: ${escapeHtml(m.suggestedKey)}</span>
-            </div>
-          `).join('')}
-          <div style="padding: 12px;">
-            <button class="jr-btn jr-btn-secondary" id="jr-open-profile" style="width: 100%; font-size: 12px;">
-              📝 Open Profile to Add Fields
-            </button>
-          </div>
-        `}
+      <div class="qa-card-meta">
+        <span class="qa-ai-icon">${QA_SVG.sparkle}</span>
+        <span style="font-size:11.5px;font-weight:600;color:#a78bfa">Claude is writing…</span>
       </div>
-    </div>
-    <div class="jr-actions">
-      ${fillable.length > 0 ? `
-        <button class="jr-btn jr-btn-primary" id="jr-fill-all">✓ Fill All (${fillable.length})</button>
-      ` : `
-        <button class="jr-btn jr-btn-secondary" id="jr-open-profile-main" style="flex: 1;">📝 Add Profile Fields</button>
-      `}
-      <button class="jr-btn jr-btn-secondary" id="jr-dismiss">✕ Close</button>
-    </div>
-    ${aiEnabled ? `
-    <div style="padding: 12px; border-top: 1px solid #e2e8f0; background: #f0f9ff;">
-      <div style="font-size: 12px; color: #0369a1; margin-bottom: 8px;">🤖 AI Features</div>
-      <div style="display: flex; flex-direction: column; gap: 8px;">
-        <button class="jr-btn jr-btn-secondary" id="jr-ai-help" style="width: 100%; font-size: 12px; padding: 8px;">
-          ✨ Get AI help for unanswered questions
-        </button>
-        <button class="jr-btn jr-btn-secondary" id="jr-cover-letter" style="width: 100%; font-size: 12px; padding: 8px; background: #dcfce7; color: #166534;">
-          📝 Generate Cover Letter
-        </button>
-      </div>
-    </div>
-    ` : ''}
+    </div>`).join('');
+
+  const missingHtml = missingFields.length === 0 ? `
+    <div class="qa-missing-note">Nothing missing — your profile covers every question on this page.</div>
+  ` : `
+    <div class="qa-missing-note">${missingFields.length === 1 ? 'One question' : missingFields.length + ' questions'} your profile can't answer yet. Add them once — filled forever after.</div>
+    ${missingFields.map(m => {
+      const ai = m.suggestedKey.startsWith('answers');
+      return `
+      <div class="qa-card" style="cursor:default">
+        <div class="qa-q" title="${escapeHtml(m.label)}">${escapeHtml(truncate(m.label, 110))}</div>
+        <div class="qa-card-meta">
+          <span class="qa-key${ai ? ' ai' : ''}">${escapeHtml(m.suggestedKey)}</span>
+          <span class="qa-spacer"></span>
+          <span class="qa-add${ai && aiEnabled ? ' ai' : ''}">${ai && aiEnabled ? 'Ask Claude' : 'Add now'}</span>
+        </div>
+      </div>`;
+    }).join('')}
+    <button class="qa-btn-secondary" id="jr-open-profile" style="margin-top:2px">Open profile</button>
   `;
-  
+
+  const aiStrip = aiEnabled && missingFields.length > 0 ? `
+    <div class="qa-ai">
+      <span class="qa-ai-icon">${QA_SVG.sparkle}</span>
+      <div class="qa-ai-text">
+        <span class="qa-ai-title">Claude can answer the ${missingFields.length} open question${missingFields.length === 1 ? '' : 's'}</span>
+        <span class="qa-ai-sub">Runs on your desktop — no API key</span>
+      </div>
+      <button class="qa-ai-btn" id="jr-ai-help">Ask</button>
+    </div>` : '';
+
+  overlay.innerHTML = `
+    <style>${QA_CSS}</style>
+    <div class="qa-panel">
+      <div class="qa-header">
+        <span class="qa-logo">Q</span>
+        <span class="qa-title">QuickApply</span>
+        <button class="qa-iconbtn" id="jr-minimize" title="Minimize">${QA_SVG.minus}</button>
+        <button class="qa-iconbtn" id="jr-close" title="Close">${QA_SVG.close}</button>
+      </div>
+      <div class="qa-profile">
+        <span class="qa-dim">Profile</span>
+        <span class="qa-profile-name">${escapeHtml(currentProfile?.name || 'No profile')}</span>
+        <span class="qa-spacer"></span>
+        <span class="qa-link" id="jr-switch">Switch</span>
+      </div>
+      <div class="qa-status" id="jr-status">
+        <span class="qa-status-dot"></span>
+        <span class="qa-status-strong" id="jr-ready-count">${fillable.length} answer${fillable.length === 1 ? '' : 's'} ready</span>
+        <span class="qa-dim12" id="jr-status-note">${pendingAIFields.length > 0 ? `· Claude is writing ${pendingAIFields.length} more…` : usingSavedAccountFor ? `· using your saved ${escapeHtml(usingSavedAccountFor)} login` : '· nothing is submitted for you'}</span>
+      </div>
+      <div class="qa-tabs">
+        <button class="qa-tab active" data-tab="suggestions">Suggestions</button>
+        <button class="qa-tab" data-tab="missing">Missing (${missingFields.length})</button>
+      </div>
+      <div class="qa-body">
+        <div class="qa-tab-content active" id="jr-tab-suggestions">${cardsHtml}</div>
+        <div class="qa-tab-content" id="jr-tab-missing">${missingHtml}</div>
+      </div>
+      <div class="qa-footer">
+        <div class="qa-actions">
+          ${fillable.length > 0 || pendingAIFields.length > 0
+            ? `<button class="qa-btn-primary" id="jr-fill-all">Fill all (${fillable.length})</button>`
+            : `<button class="qa-btn-secondary" id="jr-open-profile-main" style="flex:1">Add profile fields</button>`}
+          <button class="qa-btn-ghost" id="jr-dismiss">Close</button>
+        </div>
+        ${aiStrip}
+      </div>
+    </div>
+    <button class="qa-pill" id="jr-pill" title="Expand QuickApply">
+      <span class="qa-pill-logo">Q</span>
+      <span class="qa-pill-name">QuickApply</span>
+      <span class="qa-pill-count">${fillable.length}</span>
+    </button>
+  `;
+
   document.body.appendChild(overlay);
-  
+
   document.getElementById('jr-close')?.addEventListener('click', () => overlay.remove());
   document.getElementById('jr-dismiss')?.addEventListener('click', () => overlay.remove());
+  document.getElementById('jr-minimize')?.addEventListener('click', () => overlay.classList.add('jr-min'));
+  document.getElementById('jr-pill')?.addEventListener('click', () => overlay.classList.remove('jr-min'));
   document.getElementById('jr-fill-all')?.addEventListener('click', fillAllFields);
   document.getElementById('jr-ai-help')?.addEventListener('click', showAIAssistant);
-  document.getElementById('jr-cover-letter')?.addEventListener('click', showCoverLetterGenerator);
-  document.getElementById('jr-open-profile')?.addEventListener('click', () => {
-    chrome.runtime.sendMessage({ type: 'openOptions' });
-  });
-  document.getElementById('jr-open-profile-main')?.addEventListener('click', () => {
-    chrome.runtime.sendMessage({ type: 'openOptions' });
-  });
-  
-  // Tab switching
-  overlay.querySelectorAll('.jr-tab').forEach(tab => {
-    tab.addEventListener('click', () => {
-      const tabName = tab.getAttribute('data-tab');
-      overlay.querySelectorAll('.jr-tab').forEach(t => t.classList.remove('active'));
-      overlay.querySelectorAll('.jr-tab-content').forEach(c => c.classList.remove('active'));
-      tab.classList.add('active');
-      document.getElementById(`jr-tab-${tabName}`)?.classList.add('active');
+  const openOptions = () => chrome.runtime.sendMessage({ type: 'openOptions' });
+  document.getElementById('jr-open-profile')?.addEventListener('click', openOptions);
+  document.getElementById('jr-open-profile-main')?.addEventListener('click', openOptions);
+  document.getElementById('jr-switch')?.addEventListener('click', openOptions);
+
+  overlay.querySelectorAll('.qa-add').forEach(el => {
+    el.addEventListener('click', () => {
+      if (el.classList.contains('ai')) showAIAssistant();
+      else openOptions();
     });
   });
-  
-  // Click to fill individual items
-  overlay.querySelectorAll('.jr-item').forEach(el => {
-    el.addEventListener('click', (e) => {
-      // Don't fill if clicking on editable value
-      if ((e.target as HTMLElement).classList.contains('jr-value')) return;
-      
-      const index = parseInt(el.getAttribute('data-index') || '0');
-      const fillable = suggestions.filter(s => !s.skipAutoFill && s.value);
-      const suggestion = fillable[index];
-      
-      // Check if value was edited
-      const valueEl = el.querySelector('.jr-value') as HTMLElement;
+
+  // Tab switching
+  overlay.querySelectorAll('.qa-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      overlay.querySelectorAll('.qa-tab').forEach(t => t.classList.remove('active'));
+      overlay.querySelectorAll('.qa-tab-content').forEach(c => c.classList.remove('active'));
+      tab.classList.add('active');
+      document.getElementById(`jr-tab-${tab.getAttribute('data-tab')}`)?.classList.add('active');
+    });
+  });
+
+  // Delegated card interactions — also covers cards Claude adds later
+  document.getElementById('jr-tab-suggestions')?.addEventListener('click', (e) => {
+    const target = e.target as HTMLElement;
+    const el = target.closest('.qa-card[data-index]') as HTMLElement | null;
+    if (!el) return;
+    if (target.classList.contains('qa-answer')) return; // user is editing
+
+    const index = parseInt(el.getAttribute('data-index') || '0');
+    const fillableNow = suggestions.filter(s => !s.skipAutoFill && s.value);
+    const suggestion = fillableNow[index];
+    if (!suggestion) return;
+
+    if (target.classList.contains('qa-action')) {
+      if (el.classList.contains('failed')) {
+        suggestion.field.element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        highlightField(suggestion.field.element);
+        return;
+      }
+      if (el.classList.contains('filled')) {
+        if (undoFill(suggestion)) updateCardState(el, suggestion, null);
+        return;
+      }
+    }
+    if (el.classList.contains('filled')) return;
+
+    if (!suggestion.mask) {
+      const valueEl = el.querySelector('.qa-answer') as HTMLElement;
       const editedValue = valueEl?.textContent?.trim() || '';
       const originalValue = valueEl?.getAttribute('data-original') || '';
-      
-      if (editedValue !== originalValue) {
-        // User edited the value - learn from this correction
+      if (editedValue && editedValue !== originalValue) {
         suggestion.value = editedValue;
         learnFromCorrection(suggestion.field.label, suggestion.field.name, editedValue);
       }
-      
-      if (fillField(suggestion)) {
-        (el as HTMLElement).classList.add('filled');
-      }
-    });
+    }
+
+    const ok = fillField(suggestion);
+    if (ok) registerAccountIfNeeded(suggestion);
+    updateCardState(el, suggestion, ok);
   });
-  
-  // Learn from corrections when user edits and blurs
-  overlay.querySelectorAll('.jr-value[contenteditable]').forEach(el => {
-    el.addEventListener('blur', () => {
-      const original = el.getAttribute('data-original') || '';
-      const current = el.textContent?.trim() || '';
-      if (current !== original) {
-        el.classList.add('edited');
-        (el as HTMLElement).style.background = '#fef3c7';
+
+  // Answer the genuinely-new questions with Claude, in parallel, without blocking
+  resolvePendingAI();
+}
+
+let hasFilledAll = false;
+
+async function resolvePendingAI() {
+  if (pendingAIFields.length === 0) return;
+  let remaining = pendingAIFields.length;
+
+  const updateStatus = () => {
+    const fillableCount = suggestions.filter(s => !s.skipAutoFill && s.value).length;
+    const ready = document.getElementById('jr-ready-count');
+    if (ready) ready.textContent = `${fillableCount} answer${fillableCount === 1 ? '' : 's'} ready`;
+    const note = document.getElementById('jr-status-note');
+    if (note && !document.getElementById('jr-status')?.classList.contains('post')) {
+      note.textContent = remaining > 0 ? `· Claude is writing ${remaining} more…` : '· nothing is submitted for you';
+    }
+    const btn = document.getElementById('jr-fill-all');
+    if (btn) btn.textContent = `${hasFilledAll ? 'Fill again' : 'Fill all'} (${fillableCount})`;
+    const missTab = document.querySelector('.qa-tab[data-tab="missing"]');
+    if (missTab) missTab.textContent = `Missing (${missingFields.length})`;
+  };
+
+  await Promise.allSettled(pendingAIFields.map(async (field, pi) => {
+    const isOpenEnded = isEssayField(field);
+    let suggestion: Suggestion | null = null;
+    try {
+      suggestion = isOpenEnded ? await generateAIAnswerForField(field) : await tryAIMatch(field);
+    } catch (e) {}
+    remaining--;
+
+    const card = document.querySelector(`.qa-card[data-pending-id="${pi}"]`) as HTMLElement | null;
+    if (suggestion) {
+      saveAnswerToCache(field.label, suggestion.value);
+      suggestions.push(suggestion);
+      const idx = suggestions.filter(s => !s.skipAutoFill && s.value).length - 1;
+      if (card) card.outerHTML = buildCardHtml(suggestion, idx);
+    } else {
+      if (card) card.remove();
+      const suggestedKey = detectMissingFieldKey(field.label, field.name) || `Custom: "${truncate(field.label, 30)}"`;
+      missingFields.push({ label: field.label, suggestedKey });
+      const missBody = document.getElementById('jr-tab-missing');
+      if (missBody) {
+        const div = document.createElement('div');
+        div.className = 'qa-card';
+        div.style.cursor = 'default';
+        div.innerHTML = `<div class="qa-q">${escapeHtml(truncate(field.label, 110))}</div><div class="qa-card-meta"><span class="qa-key">${escapeHtml(suggestedKey)}</span></div>`;
+        missBody.appendChild(div);
       }
-    });
+    }
+    updateStatus();
+  }));
+  updateStatus();
+}
+
+// Move a suggestion card between default / filled / failed states (design 02)
+function updateCardState(item: HTMLElement, suggestion: Suggestion, ok: boolean | null) {
+  item.classList.remove('filled', 'failed');
+  const conf = item.querySelector('.qa-conf') as HTMLElement | null;
+  const action = item.querySelector('.qa-action') as HTMLElement | null;
+  if (ok === null) { // back to default after undo
+    if (conf) conf.textContent = qaConf(suggestion.confidence).label;
+    if (action) action.textContent = 'Click to fill';
+    return;
+  }
+  item.classList.add(ok ? 'filled' : 'failed');
+  if (conf) conf.textContent = ok ? 'Filled' : 'Fill manually';
+  if (action) action.textContent = ok ? (suggestion.undoable ? 'Undo' : 'Filled') : 'Scroll to field';
+}
+
+function undoFill(suggestion: Suggestion): boolean {
+  if (!suggestion.undoable) return false;
+  const el = suggestion.field.element;
+  if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || el instanceof HTMLSelectElement) {
+    setNativeValue(el, suggestion.prevValue || '');
+    return true;
+  }
+  return false;
+}
+
+// "No form fields found" card (design 02, empty state)
+function showEmptyState() {
+  const existing = document.getElementById('jobright-overlay');
+  if (existing) existing.remove();
+  const overlay = document.createElement('div');
+  overlay.id = 'jobright-overlay';
+  overlay.innerHTML = `
+    <style>${QA_CSS}</style>
+    <div class="qa-empty">
+      <span class="qa-empty-icon">${QA_SVG.search}</span>
+      <div class="qa-empty-title">No form fields found here</div>
+      <div class="qa-empty-sub">This looks like a job description, not an application. QuickApply will wake up on the apply page.</div>
+      <button class="qa-btn-secondary" id="jr-save-job" style="margin-top:2px;padding:8px 14px;font-size:12.5px">Save job to tracker</button>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  document.getElementById('jr-save-job')?.addEventListener('click', async () => {
+    try {
+      await sendMessage({
+        type: 'saveApplication',
+        application: {
+          company: extractCompanyName(), position: extractJobTitle() || document.title,
+          url: location.href, status: 'saved', source: 'manual',
+          notes: 'Saved from job page', contacts: [], interviews: [], followUps: []
+        }
+      });
+    } catch (e) {}
+    showMessage('Saved to tracker', 'success');
+    overlay.remove();
   });
 }
 
@@ -1951,19 +2158,62 @@ function truncate(text: string, len: number): string {
 
 function fillAllFields() {
   const fillable = suggestions.filter(s => !s.skipAutoFill && s.value);
+  const scrollX = window.scrollX, scrollY = window.scrollY;
+  const t0 = performance.now();
   let filled = 0;
-  
-  for (const suggestion of fillable) {
-    if (fillField(suggestion)) {
+
+  hasFilledAll = true;
+  fillable.forEach((suggestion, i) => {
+    const ok = fillField(suggestion);
+    if (ok) {
       filled++;
+      registerAccountIfNeeded(suggestion);
     }
-  }
-  
-  showMessage(`Filled ${filled} of ${fillable.length} fields!`, 'success');
-  
-  document.querySelectorAll('.jr-item').forEach(el => {
-    (el as HTMLElement).classList.add('filled');
+    const item = document.querySelector(`#jr-tab-suggestions .qa-card[data-index="${i}"]`) as HTMLElement | null;
+    if (item) updateCardState(item, suggestion, ok);
   });
+
+  // Focus/click during filling scrolls the page around — put the user back
+  window.scrollTo(scrollX, scrollY);
+
+  const failed = fillable.length - filled;
+  const secs = ((performance.now() - t0) / 1000).toFixed(1);
+  const status = document.getElementById('jr-status');
+  if (status) {
+    status.classList.add('post');
+    const okPct = Math.round((filled / Math.max(fillable.length, 1)) * 100);
+    status.innerHTML = `
+      <div class="qa-status-row">
+        ${QA_SVG.checkSmall}
+        <span class="qa-status-strong">${filled} filled</span>
+        ${failed > 0 ? `<span class="qa-amber">\u00b7 ${failed} need you</span>` : ''}
+        <span class="qa-spacer"></span>
+        <span class="qa-dim12">${secs}s</span>
+      </div>
+      <div class="qa-bar"><span class="ok" style="width:${okPct}%"></span><span class="warn" style="width:${100 - okPct}%"></span></div>
+    `;
+  }
+  const btn = document.getElementById('jr-fill-all');
+  if (btn) btn.textContent = `Fill again (${fillable.length})`;
+
+  showMessage(
+    failed === 0 ? `${filled} fields filled \u00b7 logged to tracker` : `${filled} filled \u00b7 ${failed} need you`,
+    failed === 0 ? 'success' : 'warning'
+  );
+
+  // Log this application in the tracker automatically
+  sendMessage({
+    type: 'saveApplication',
+    application: {
+      company: extractCompanyName(),
+      position: extractJobTitle() || document.title,
+      url: location.href,
+      status: 'applied',
+      source: 'autofill',
+      notes: `Auto-filled ${filled}/${fillable.length} fields`,
+      contacts: [], interviews: [], followUps: []
+    }
+  }).catch(() => {});
 }
 
 function fillField(suggestion: Suggestion): boolean {
@@ -1999,10 +2249,20 @@ function fillField(suggestion: Suggestion): boolean {
     
     // Native text inputs and textareas
     if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) {
+      suggestion.prevValue = el.value;
+      suggestion.undoable = true;
       el.focus();
-      el.value = value;
-      el.dispatchEvent(new Event('input', { bubbles: true }));
-      el.dispatchEvent(new Event('change', { bubbles: true }));
+      setNativeValue(el, value);
+      el.dispatchEvent(new Event('blur', { bubbles: true }));
+      highlightField(el);
+      return true;
+    }
+
+    // Contenteditable rich text (Workday richTextArea etc.)
+    if (el.isContentEditable) {
+      el.focus();
+      el.textContent = value;
+      el.dispatchEvent(new InputEvent('input', { bubbles: true }));
       el.dispatchEvent(new Event('blur', { bubbles: true }));
       highlightField(el);
       return true;
@@ -2010,6 +2270,8 @@ function fillField(suggestion: Suggestion): boolean {
     
     // Native selects
     if (el instanceof HTMLSelectElement) {
+      suggestion.prevValue = el.value;
+      suggestion.undoable = true;
       return fillNativeSelect(el, value);
     }
     
@@ -2037,24 +2299,56 @@ function fillField(suggestion: Suggestion): boolean {
   }
 }
 
-function fillNativeSelect(select: HTMLSelectElement, value: string): boolean {
-  const valueLower = value.toLowerCase();
-  
-  for (const option of Array.from(select.options)) {
-    const optionText = option.text.toLowerCase();
-    const optionValue = option.value.toLowerCase();
-    
-    if (optionText === valueLower || optionValue === valueLower ||
-        optionText.includes(valueLower) || valueLower.includes(optionText) ||
-        (valueLower === 'yes' && optionText.includes('yes')) ||
-        (valueLower === 'no' && optionText.includes('no'))) {
-      select.value = option.value;
-      select.dispatchEvent(new Event('change', { bubbles: true }));
-      highlightField(select);
-      return true;
+// React (Workday, Greenhouse, Lever...) ignores plain `el.value = x` — its internal
+// value tracker sees no change and discards the input event. Must use the native setter.
+function setNativeValue(el: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement, value: string) {
+  const proto = el instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype
+              : el instanceof HTMLSelectElement ? HTMLSelectElement.prototype
+              : HTMLInputElement.prototype;
+  const setter = Object.getOwnPropertyDescriptor(proto, 'value')?.set;
+  if (setter) setter.call(el, value);
+  else (el as any).value = value;
+  el.dispatchEvent(new Event('input', { bubbles: true }));
+  el.dispatchEvent(new Event('change', { bubbles: true }));
+}
+
+// Score how well an option's text matches the desired value. 0 = no match.
+// Exact > word-boundary (for short values like "Yes"/"No" — plain includes()
+// would match "No" against "Norway") > substring.
+function optionMatchScore(optionText: string, value: string): number {
+  const o = optionText.toLowerCase().trim();
+  const v = value.toLowerCase().trim();
+  if (!o || !v) return 0;
+  if (o === v) return 3;
+  if (new RegExp(`(^|\\W)${v.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(\\W|$)`).test(o)) return 2;
+  if (v.length >= 3 && (o.includes(v) || v.includes(o))) return 1;
+  return 0;
+}
+
+function pickBestOption<T>(options: T[], getText: (o: T) => string, value: string): T | null {
+  let best: T | null = null;
+  let bestScore = 0;
+  for (const opt of options) {
+    const score = optionMatchScore(getText(opt), value);
+    if (score > bestScore) {
+      bestScore = score;
+      best = opt;
     }
   }
-  
+  return best;
+}
+
+function fillNativeSelect(select: HTMLSelectElement, value: string): boolean {
+  const option = pickBestOption(
+    Array.from(select.options),
+    o => o.text || o.value,
+    value
+  );
+  if (option) {
+    setNativeValue(select, option.value);
+    highlightField(select);
+    return true;
+  }
   return false;
 }
 
@@ -2152,118 +2446,72 @@ function fillRadio(firstRadio: HTMLInputElement, value: string): boolean {
   return false;
 }
 
-function fillCustomDropdown(el: HTMLElement, value: string, questionLabel: string): boolean {
-  console.log('JobRight AI: Attempting to fill custom dropdown:', questionLabel);
-  
-  // WORKDAY-SPECIFIC: Handle Workday dropdowns
-  if (currentATS === 'workday') {
-    return fillWorkdayDropdown(el, value);
-  }
-  
-  // Try clicking to open the dropdown
+const DROPDOWN_OPTION_SELECTORS = [
+  '[data-automation-id="promptOption"]', // Workday
+  '[role="option"]',
+  '[role="menuitem"]',
+  '[data-automation-widget="wd-popup-list"] div[tabindex]',
+  'ul[role="listbox"] li',
+  '[class*="option"]',
+  'li',
+].join(', ');
+
+function simulateClick(el: HTMLElement) {
+  const opts = { bubbles: true, cancelable: true, view: window };
+  el.dispatchEvent(new MouseEvent('mousedown', opts));
+  el.dispatchEvent(new MouseEvent('mouseup', opts));
   el.click();
-  el.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-  
-  // Wait a bit for dropdown to open, then try to find and click the option
-  setTimeout(() => {
-    const valueLower = value.toLowerCase();
-    
-    // Look for option elements
-    const optionSelectors = [
-      '[role="option"]',
-      '[role="menuitem"]',
-      '[class*="option"]',
-      '[class*="Option"]',
-      '[class*="item"]',
-      '[class*="Item"]',
-      'li',
-    ];
-    
-    for (const selector of optionSelectors) {
-      const options = document.querySelectorAll(selector);
-      for (const opt of Array.from(options)) {
-        const optText = opt.textContent?.toLowerCase().trim() || '';
-        
-        if (optText === valueLower || optText.includes(valueLower) ||
-            (valueLower === 'yes' && optText.includes('yes')) ||
-            (valueLower === 'no' && optText.includes('no'))) {
-          (opt as HTMLElement).click();
-          highlightField(el);
-          console.log('JobRight AI: Clicked option:', opt.textContent);
-          return;
-        }
-      }
-    }
-    
-    console.log('JobRight AI: Could not find matching option for:', value);
-  }, 300);
-  
-  highlightField(el, `Select: ${value}`);
-  return true; // Return true since we attempted
 }
 
-// Workday-specific dropdown handling
-function fillWorkdayDropdown(el: HTMLElement, value: string): boolean {
-  console.log('JobRight AI: Using Workday dropdown handler');
-  const valueLower = value.toLowerCase().trim();
-  
-  // First, try to find and click the dropdown trigger
-  const trigger = el.querySelector('[data-automation-id*="dropdown"], [role="combobox"], button') as HTMLElement || el;
-  trigger.click();
-  trigger.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
-  trigger.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-  
-  // Wait for popup to appear
-  setTimeout(() => {
-    // Workday options can appear in a popup list
-    const workdayOptionSelectors = [
-      '[data-automation-id="promptOption"]',
-      '[data-automation-id*="option"]',
-      '[data-automation-id*="Option"]',
-      '[role="option"]',
-      '[data-uxi-element-id]',
-      '.css-1hwfws3 > div', // Workday's option items
-      '[data-automation-widget="wd-popup-list"] div[tabindex]',
-    ];
-    
-    for (const selector of workdayOptionSelectors) {
-      const options = document.querySelectorAll(selector);
-      for (const opt of Array.from(options)) {
-        const optText = opt.textContent?.toLowerCase().trim() || '';
-        
-        if (optText === valueLower || optText.includes(valueLower) ||
-            (valueLower === 'yes' && optText.includes('yes')) ||
-            (valueLower === 'no' && optText.includes('no'))) {
-          console.log('JobRight AI: Found Workday option:', opt.textContent);
-          (opt as HTMLElement).click();
-          (opt as HTMLElement).dispatchEvent(new MouseEvent('click', { bubbles: true }));
-          highlightField(el);
-          return;
-        }
-      }
+// Options render asynchronously in a portal after the trigger is clicked —
+// poll for them instead of guessing a delay.
+function pollForOption(value: string, timeoutMs: number, onDone: (found: boolean) => void) {
+  const start = Date.now();
+  const tick = () => {
+    // Only consider options that are visible (a dropdown is actually open)
+    const candidates = Array.from(document.querySelectorAll(DROPDOWN_OPTION_SELECTORS))
+      .filter(o => (o as HTMLElement).offsetParent !== null && (o.textContent || '').trim().length > 0);
+    const best = pickBestOption(candidates, o => o.textContent || '', value);
+    if (best) {
+      simulateClick(best as HTMLElement);
+      onDone(true);
+      return;
     }
-    
-    // If no option found, try typing in the search box
-    const searchInput = document.querySelector('[data-automation-id="searchBox"] input') as HTMLInputElement;
-    if (searchInput) {
+    if (Date.now() - start < timeoutMs) setTimeout(tick, 150);
+    else onDone(false);
+  };
+  setTimeout(tick, 150);
+}
+
+function fillCustomDropdown(el: HTMLElement, value: string, questionLabel: string): boolean {
+  console.log('JobRight AI: Attempting to fill custom dropdown:', questionLabel);
+
+  // Open the dropdown
+  const trigger = (el.querySelector('[data-automation-id*="dropdown"], [role="combobox"], button, [aria-haspopup]') as HTMLElement) || el;
+  simulateClick(trigger);
+
+  pollForOption(value, 2000, (found) => {
+    if (found) {
+      highlightField(el);
+      return;
+    }
+    // Workday multiselect prompts: type into the search box, then pick the first result
+    const searchInput = document.querySelector('[data-automation-id="searchBox"] input, [data-automation-id="multiselectInputContainer"] input') as HTMLInputElement;
+    if (searchInput && searchInput.offsetParent !== null) {
       searchInput.focus();
-      searchInput.value = value;
-      searchInput.dispatchEvent(new Event('input', { bubbles: true }));
-      
-      // After typing, click the first matching result
-      setTimeout(() => {
-        const firstOption = document.querySelector('[data-automation-id="promptOption"], [role="option"]') as HTMLElement;
-        if (firstOption) {
-          firstOption.click();
-        }
-      }, 500);
+      setNativeValue(searchInput, value);
+      searchInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+      pollForOption(value, 2500, (foundAfterSearch) => {
+        if (foundAfterSearch) highlightField(el);
+        else highlightField(el, `Select manually: ${value}`);
+      });
+      return;
     }
-    
-    console.log('JobRight AI: Workday dropdown - could not find matching option for:', value);
-  }, 400);
-  
-  highlightField(el, `Select: ${value}`);
-  return true;
+    console.log('JobRight AI: Could not find matching option for:', value);
+    highlightField(el, `Select manually: ${value}`);
+  });
+
+  return true; // async attempt; field is highlighted with guidance if it fails
 }
 
 function highlightField(el: HTMLElement, message?: string) {
@@ -2305,35 +2553,23 @@ function highlightField(el: HTMLElement, message?: string) {
 function showMessage(text: string, type: 'success' | 'warning' | 'info' | 'error') {
   const existing = document.getElementById('jobright-message');
   if (existing) existing.remove();
-  
-  const colors = {
-    success: { bg: '#dcfce7', border: '#22c55e', text: '#166534' },
-    warning: { bg: '#fef3c7', border: '#f59e0b', text: '#92400e' },
-    info: { bg: '#dbeafe', border: '#3b82f6', text: '#1e40af' },
-    error: { bg: '#fee2e2', border: '#ef4444', text: '#991b1b' }
-  };
-  
-  const color = colors[type];
-  
+
+  // Toast: dark card, 3px left accent \u2014 lime / amber / neutral (amber, never red)
+  const accents = { success: '#c9f24d', warning: '#f0b429', error: '#f0b429', info: '#8a8a86' };
+
   const msg = document.createElement('div');
   msg.id = 'jobright-message';
   msg.style.cssText = `
-    position: fixed;
-    top: 20px;
-    right: 20px;
-    background: ${color.bg};
-    border: 2px solid ${color.border};
-    color: ${color.text};
-    padding: 16px 20px;
-    border-radius: 8px;
-    z-index: 2147483647;
+    position: fixed; bottom: 20px; left: 20px; z-index: 2147483647;
+    display: flex; align-items: center; gap: 10px;
+    background: #14140f; border: 1px solid #2e2e2b; border-left: 3px solid ${accents[type]};
+    border-radius: 12px; padding: 11px 13px; max-width: 360px;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    font-size: 14px;
-    max-width: 350px;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    font-size: 13px; font-weight: ${type === 'info' ? '400' : '600'};
+    color: ${type === 'info' ? '#c4c4bf' : '#f4f4f2'};
+    box-shadow: 0 18px 40px -14px rgba(0,0,0,.7);
   `;
   msg.textContent = text;
-  
   document.body.appendChild(msg);
   setTimeout(() => msg.remove(), 5000);
 }

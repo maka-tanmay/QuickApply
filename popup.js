@@ -112,6 +112,13 @@ async function loadSettings() {
     console.log('JobRight AI: Loaded settings:', settings);
     activeProfileId = settings?.activeProfileId || null;
     extensionEnabled = settings?.extensionEnabled !== false;
+    const autoScanToggle = document.getElementById('auto-scan-toggle');
+    if (autoScanToggle) {
+      autoScanToggle.checked = settings?.autoScan !== false;
+      autoScanToggle.addEventListener('change', () => {
+        chrome.runtime.sendMessage({ type: 'updateSettings', settings: { autoScan: autoScanToggle.checked } });
+      });
+    }
   } catch (e) {
     console.error('JobRight AI: Error loading settings:', e);
     extensionEnabled = true;
@@ -174,6 +181,10 @@ function renderUI() {
     const completeness = calculateCompleteness(profile);
     if (elements.completenessPercent) elements.completenessPercent.textContent = `${completeness}%`;
     if (elements.completenessFill) elements.completenessFill.style.width = `${completeness}%`;
+    const hint = document.getElementById('completeness-hint');
+    if (hint) hint.textContent = completeness >= 100 ? 'Everything filled — you\'re set' : 'Fill the gaps in Settings to reach 100%';
+    const pausedName = document.getElementById('paused-name');
+    if (pausedName) pausedName.textContent = name;
     
     // Button text
     if (elements.resumeBtnText) elements.resumeBtnText.textContent = 'Edit Resume';
@@ -259,6 +270,18 @@ function setupEventListeners() {
       chrome.runtime.openOptionsPage();
     });
   }
+
+  // Paused state: Resume button flips the master toggle back on
+  document.getElementById('resume-btn')?.addEventListener('click', () => {
+    if (elements.toggle) {
+      elements.toggle.checked = true;
+      elements.toggle.dispatchEvent(new Event('change'));
+    }
+  });
+
+  // No-profile state: both CTAs open the options page
+  document.getElementById('create-profile-btn')?.addEventListener('click', () => chrome.runtime.openOptionsPage());
+  document.getElementById('linkedin-import-link')?.addEventListener('click', () => chrome.runtime.openOptionsPage());
   
   // Scan Page / Auto-Fill button
   if (elements.scanPageBtn) {

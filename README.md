@@ -129,6 +129,16 @@ The extension is designed to work with LLM APIs. To integrate:
    });
    ```
 
+## Claude Code CLI Provider (no API key)
+
+The extension can use your locally installed Claude Code CLI instead of a paid API, via Chrome native messaging:
+
+1. Load the extension and copy its ID from `chrome://extensions` (Developer mode on)
+2. Run: `./native-host/install.sh <extension-id>`
+3. Restart Chrome, then pick **Claude Code CLI** as the AI provider in Options → AI Settings
+
+Requests run through `claude -p` on your machine — covered by your Claude subscription, no per-token billing.
+
 ## Privacy & Security
 
 - **Local Storage**: All profile data stored locally in IndexedDB

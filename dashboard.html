@@ -3,636 +3,238 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>JobRight AI - Dashboard</title>
+  <title>QuickApply — Tracker</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&display=swap" rel="stylesheet">
   <style>
-    /* Dashboard-specific overrides */
-    .main-container {
-      max-width: 1400px;
+    /* QuickApply design system — dark, lime accent (see DESIGN_BRIEF.md) */
+    :root {
+      --lime: #c9f24d; --lime-hover: #d8ff63; --on-lime: #0b1004;
+      --canvas: #0a0a0a; --card: #111111; --surface: #181817; --raised: #1e1e1c;
+      --border: #242423; --border-2: #2a2a28; --border-3: #2e2e2b;
+      --text: #f4f4f2; --text-2: #c4c4bf; --text-dim: #8a8a86; --text-faint: #6c6c68;
+      --amber: #f0b429; --coral: #ff6f61; --violet: #a78bfa;
     }
+    * { box-sizing: border-box; margin: 0; }
+    body {
+      background: #050505; color: var(--text);
+      font-family: "DM Sans", -apple-system, BlinkMacSystemFont, sans-serif;
+      -webkit-font-smoothing: antialiased; font-size: 14px;
+      padding: 28px;
+    }
+    button { font-family: inherit; cursor: pointer; }
+    ::selection { background: var(--lime); color: var(--on-lime); }
+    .grotesk { font-family: "Space Grotesk", sans-serif; }
 
-    .nav {
-      display: flex;
-      gap: var(--space-xs);
-      background: var(--color-bg-elevated);
-      padding: var(--space-xs);
-      border-radius: var(--radius-lg);
-      overflow-x: auto;
-    }
+    .shell { max-width: 1280px; margin: 0 auto; background: var(--canvas); border: 1px solid var(--border); border-radius: 24px; padding: 28px 32px 32px; display: flex; flex-direction: column; gap: 26px; }
 
-    .nav-item {
-      display: flex;
-      align-items: center;
-      gap: var(--space-sm);
-      padding: var(--space-sm) var(--space-lg);
-      background: transparent;
-      border: none;
-      border-radius: var(--radius-md);
-      color: var(--color-text-secondary);
-      font-family: inherit;
-      font-size: 13px;
-      font-weight: 500;
-      cursor: pointer;
-      transition: var(--transition-base);
-      white-space: nowrap;
-    }
+    /* Top nav */
+    .topbar { display: flex; align-items: center; gap: 22px; flex-wrap: wrap; }
+    .logo { width: 32px; height: 32px; border-radius: 10px; background: var(--lime); color: var(--on-lime); font-size: 15px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+    .brand { font-size: 17px; font-weight: 600; color: #f7f7f4; }
+    .nav { display: flex; align-items: center; gap: 4px; background: #131312; border: 1px solid var(--border); border-radius: 999px; padding: 5px; }
+    .nav a { font-size: 13px; font-weight: 500; color: #9d9d98; padding: 8px 14px; text-decoration: none; border-radius: 999px; }
+    .nav a:hover { color: var(--text); }
+    .nav a.active { font-weight: 600; color: var(--on-lime); background: var(--lime); }
+    .spacer { flex: 1; }
+    .me { width: 34px; height: 34px; border-radius: 999px; background: #1f1f1d; border: 1px solid var(--border-3); color: var(--text-2); font-size: 12px; font-weight: 600; display: flex; align-items: center; justify-content: center; }
 
-    .nav-item:hover {
-      color: var(--color-text-primary);
-      background: var(--color-bg-card);
-    }
+    /* Greeting row */
+    .greeting-row { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; flex-wrap: wrap; }
+    h1 { font-family: "Space Grotesk", sans-serif; font-size: 38px; font-weight: 600; letter-spacing: -.025em; color: #f7f7f4; line-height: 1; }
+    .greeting-sub { font-size: 14px; color: var(--text-dim); margin-top: 8px; }
+    .trackbox { display: flex; align-items: center; gap: 8px; background: #131312; border: 1px solid var(--border-2); border-radius: 999px; padding: 7px 7px 7px 16px; }
+    .trackbox input { background: transparent; border: none; outline: none; color: var(--text); font-size: 13px; font-family: ui-monospace, Menlo, monospace; width: 220px; }
+    .trackbox input::placeholder { color: var(--text-faint); }
+    .btn-lime { font-size: 13px; font-weight: 700; color: var(--on-lime); background: var(--lime); border: none; border-radius: 999px; padding: 9px 16px; }
+    .btn-lime:hover { background: var(--lime-hover); }
 
-    .nav-item.active {
-      background: var(--color-accent);
-      color: var(--color-text-inverse);
-    }
+    /* Stats */
+    .stats-row { display: flex; gap: 16px; flex-wrap: wrap; align-items: stretch; }
+    .stats { flex: 1; min-width: 520px; background: var(--card); border: 1px solid var(--border); border-radius: 20px; display: flex; }
+    .stat { flex: 1; padding: 20px 22px; display: flex; flex-direction: column; gap: 14px; }
+    .stat-divider { width: 1px; background: var(--border); }
+    .stat-label { font-size: 13px; color: var(--text-dim); }
+    .stat-value { font-family: "Space Grotesk", sans-serif; font-size: 44px; font-weight: 600; color: #f7f7f4; line-height: 1; letter-spacing: -.03em; }
+    .stat-value.amber { color: var(--amber); }
+    .stat-sub { font-size: 12.5px; line-height: 1.5; color: #7c7c78; }
+    .stat-inline { display: flex; align-items: baseline; gap: 8px; }
+    .week-dots { display: flex; gap: 5px; align-items: center; }
+    .week-dot { width: 22px; height: 7px; border-radius: 999px; background: var(--border); }
+    .week-dot.full { background: var(--lime); }
+    .week-dot.part { background: #2e3a12; }
 
-    .nav-item svg {
-      width: 16px;
-      height: 16px;
-    }
+    .nextup { width: 340px; flex: none; background: var(--lime); border-radius: 20px; padding: 22px; display: flex; flex-direction: column; gap: 12px; box-shadow: 0 0 70px -18px rgba(201,242,77,.45); }
+    .nextup-label { font-size: 11px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: #3f5209; flex: 1; }
+    .nextup-icon { width: 30px; height: 30px; border-radius: 999px; background: #14140f; display: flex; align-items: center; justify-content: center; flex: none; }
+    .nextup-title { font-family: "Space Grotesk", sans-serif; font-size: 26px; line-height: 1.12; font-weight: 600; letter-spacing: -.02em; color: #14140f; }
+    .nextup-sub { font-size: 13px; line-height: 1.5; color: #37460b; }
 
-    /* Stats Grid */
-    .stats-grid {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: var(--space-lg);
-      margin-bottom: var(--space-3xl);
-    }
+    /* Pipeline */
+    .pipeline { background: var(--card); border: 1px solid var(--border); border-radius: 20px; padding: 20px 22px; display: flex; flex-direction: column; gap: 16px; }
+    .pipeline-head { display: flex; align-items: baseline; gap: 10px; }
+    .pipeline-title { font-family: "Space Grotesk", sans-serif; font-size: 16px; font-weight: 600; color: #f7f7f4; }
+    .pipeline-count { font-size: 12.5px; color: #7c7c78; }
+    .chips { display: flex; gap: 10px; flex-wrap: wrap; }
+    .chip { flex: 1; min-width: 120px; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
+    .chip-label { font-size: 12.5px; color: var(--text-dim); }
+    .chip-value { font-family: "Space Grotesk", sans-serif; font-size: 26px; font-weight: 600; color: var(--text); line-height: 1; }
+    .chip.referral { background: #1c1830; border-color: #2b2540; }
+    .chip.referral .chip-label { color: #a79bd0; } .chip.referral .chip-value { color: var(--violet); }
+    .chip.applied { background: #1a1e10; border-color: #2e3a12; }
+    .chip.applied .chip-label { color: #9fae70; } .chip.applied .chip-value { color: #b3d94a; }
+    .chip.interview { background: var(--lime); border: none; }
+    .chip.interview .chip-label { color: #3f5209; font-weight: 600; } .chip.interview .chip-value { color: #14140f; }
+    .chip.offer { background: #111; border-color: var(--lime); }
+    .chip.offer .chip-value { color: var(--lime); }
+    .chip.rejected .chip-value { color: var(--coral); }
 
-    @media (max-width: 900px) {
-      .stats-grid {
-        grid-template-columns: repeat(2, 1fr);
-      }
-    }
+    /* Applications + detail */
+    .apps-wrap { background: #f7f7f2; border-radius: 20px; padding: 20px; display: flex; gap: 18px; flex-wrap: wrap; }
+    .apps { flex: 1; min-width: 380px; display: flex; flex-direction: column; gap: 14px; }
+    .apps-head { display: flex; align-items: center; gap: 10px; }
+    .apps-title { font-family: "Space Grotesk", sans-serif; font-size: 16px; font-weight: 600; color: #14140f; flex: 1; }
+    .filter { font-size: 12.5px; font-weight: 600; color: #5a5a54; background: #fff; border: 1px solid #e3e3dd; border-radius: 999px; padding: 6px 13px; }
+    .filter.active { color: #f7f7f2; background: #14140f; border-color: #14140f; }
+    .app-list { display: flex; flex-direction: column; gap: 8px; }
+    .app-row { background: #fff; border: 1px solid #e9e9e3; border-radius: 14px; padding: 13px 14px; display: flex; align-items: center; gap: 12px; cursor: pointer; text-align: left; width: 100%; font-family: inherit; }
+    .app-row.selected { background: #14140f; border-color: #14140f; }
+    .app-row.selected .app-title { color: #f7f7f4; }
+    .app-row.selected .app-sub { color: #8a8a86; }
+    .app-row.dim { opacity: .7; }
+    .app-avatar { width: 38px; height: 38px; border-radius: 11px; font-size: 12.5px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex: none; font-family: "Space Grotesk", sans-serif; background: #f0f0ea; color: #6b6b66; }
+    .app-avatar.hot { background: var(--lime); color: #14140f; }
+    .app-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+    .app-title { font-size: 13.5px; font-weight: 600; color: #14140f; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .app-sub { font-size: 12px; color: #8f8f8a; }
+    .app-status { font-size: 11.5px; font-weight: 600; border-radius: 999px; padding: 5px 11px; flex: none; color: #5a5a54; background: #f0f0ea; }
+    .app-status.interview { color: #5b7212; background: #eef7d4; }
+    .app-row.selected .app-status.interview { color: var(--lime); background: rgba(201,242,77,.14); }
+    .app-status.followup { color: #b45309; background: #fdf3e0; }
+    .app-status.rejected { color: #b91c1c; background: #fdecea; }
+    .empty-apps { font-size: 13px; color: #8f8f8a; background: #fff; border: 1px dashed #d9d9d2; border-radius: 14px; padding: 26px; text-align: center; }
 
-    @media (max-width: 500px) {
-      .stats-grid {
-        grid-template-columns: 1fr;
-      }
-    }
-
-    .stat-card {
-      background: var(--color-bg-card);
-      border: 1px solid var(--color-border);
-      border-radius: var(--radius-lg);
-      padding: var(--space-xl);
-      transition: var(--transition-base);
-    }
-
-    .stat-card:hover {
-      border-color: var(--color-border-hover);
-      transform: translateY(-2px);
-    }
-
-    .stat-label {
-      font-size: 12px;
-      font-weight: 500;
-      color: var(--color-text-muted);
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      margin-bottom: var(--space-sm);
-    }
-
-    .stat-value {
-      font-size: 32px;
-      font-weight: 700;
-      color: var(--color-text-primary);
-      letter-spacing: -0.02em;
-    }
-
-    .stat-change {
-      font-size: 12px;
-      margin-top: var(--space-xs);
-    }
-
-    .stat-change.positive {
-      color: var(--color-success);
-    }
-
-    .stat-change.negative {
-      color: var(--color-error);
-    }
-
-    /* Grid Layout */
-    .grid-2 {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: var(--space-2xl);
-    }
-
-    @media (max-width: 900px) {
-      .grid-2 {
-        grid-template-columns: 1fr;
-      }
-    }
-
-    /* Status Badge */
-    .status-badge {
-      padding: 4px 12px;
-      border-radius: 20px;
-      font-size: 11px;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.03em;
-    }
-
-    .status-applied {
-      background: var(--color-info-bg);
-      color: var(--color-info);
-    }
-
-    .status-interviewing {
-      background: var(--color-warning-bg);
-      color: var(--color-warning);
-    }
-
-    .status-offered {
-      background: var(--color-success-bg);
-      color: var(--color-success);
-    }
-
-    .status-rejected {
-      background: var(--color-error-bg);
-      color: var(--color-error);
-    }
-
-    .status-saved {
-      background: var(--color-bg-elevated);
-      color: var(--color-text-muted);
-    }
-
-    /* Suggestion Item */
-    .suggestion-item {
-      padding: var(--space-md) var(--space-lg);
-      background: var(--color-bg-elevated);
-      border-left: 3px solid var(--color-accent);
-      border-radius: 0 var(--radius-md) var(--radius-md) 0;
-      margin-bottom: var(--space-sm);
-      font-size: 14px;
-      color: var(--color-text-secondary);
-    }
-
-    /* Copy Button in Results */
-    .copy-btn {
-      margin-top: var(--space-md);
-    }
+    .detail { width: 420px; flex: none; background: #14140f; border-radius: 16px; padding: 20px; display: flex; flex-direction: column; gap: 16px; align-self: flex-start; }
+    .detail-head { display: flex; align-items: flex-start; gap: 14px; }
+    .detail-avatar { width: 44px; height: 44px; border-radius: 13px; background: var(--lime); color: #14140f; font-size: 14px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex: none; font-family: "Space Grotesk", sans-serif; }
+    .detail-title { font-family: "Space Grotesk", sans-serif; font-size: 19px; line-height: 1.2; font-weight: 600; color: #f7f7f4; letter-spacing: -.015em; }
+    .detail-sub { font-size: 12.5px; color: var(--text-dim); margin-top: 5px; }
+    .detail-score { display: flex; flex-direction: column; align-items: flex-end; flex: none; }
+    .detail-score-num { font-family: "Space Grotesk", sans-serif; font-size: 28px; font-weight: 600; color: var(--lime); line-height: 1; letter-spacing: -.02em; }
+    .detail-score-label { font-size: 11px; color: #7c7c78; text-align: right; line-height: 1.3; }
+    .hr { height: 1px; background: var(--border); }
+    .log-label { font-size: 11px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: #7c7c78; }
+    .log-row { display: flex; align-items: center; gap: 9px; font-size: 12.5px; color: var(--text-2); }
+    .log-dot { width: 6px; height: 6px; border-radius: 999px; flex: none; }
+    .log-row .grow { flex: 1; }
+    .log-count { color: #7c7c78; }
+    .detail-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    .btn-dark { font-size: 13px; font-weight: 600; color: #e6e6e1; background: var(--raised); border: 1px solid var(--border-3); border-radius: 999px; padding: 11px 18px; }
+    .btn-dark:hover { background: #262624; }
+    .btn-lime-lg { font-size: 13px; font-weight: 700; color: var(--on-lime); background: var(--lime); border: none; border-radius: 999px; padding: 11px 18px; }
+    .btn-lime-lg:hover { background: var(--lime-hover); }
+    .detail-empty { font-size: 13px; color: var(--text-dim); text-align: center; padding: 20px 0; }
   </style>
 </head>
 <body>
-  <!-- Header -->
-  <header class="header">
-    <div class="header-inner">
-      <div class="brand">
-        <div class="brand-logo">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M12 2L2 7l10 5 10-5-10-5z"/>
-            <path d="M2 17l10 5 10-5"/>
-            <path d="M2 12l10 5 10-5"/>
-          </svg>
-        </div>
-        <div class="brand-text">
-          <h1>JobRight AI</h1>
-          <span>Career Command Center</span>
-        </div>
-  </div>
-  
+  <div class="shell">
+    <!-- Nav -->
+    <div class="topbar">
+      <span class="logo grotesk">Q</span>
+      <span class="brand grotesk">QuickApply</span>
       <nav class="nav">
-        <button class="nav-item active" data-tab="overview">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <rect x="3" y="3" width="7" height="7"/>
-            <rect x="14" y="3" width="7" height="7"/>
-            <rect x="14" y="14" width="7" height="7"/>
-            <rect x="3" y="14" width="7" height="7"/>
-          </svg>
-          Overview
-        </button>
-        <button class="nav-item" data-tab="applications">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-            <polyline points="14 2 14 8 20 8"/>
-            <line x1="16" y1="13" x2="8" y2="13"/>
-            <line x1="16" y1="17" x2="8" y2="17"/>
-          </svg>
-          Applications
-        </button>
-        <button class="nav-item" data-tab="job-analyzer">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="11" cy="11" r="8"/>
-            <line x1="21" y1="21" x2="16.65" y2="16.65"/>
-          </svg>
-          Job Analyzer
-        </button>
-        <button class="nav-item" data-tab="ats-optimizer">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M12 20h9"/>
-            <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
-          </svg>
-          ATS Optimizer
-        </button>
-        <button class="nav-item" data-tab="interview-prep">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-          </svg>
-          Interview Prep
-        </button>
-        <button class="nav-item" data-tab="cover-letter">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
-            <polyline points="22,6 12,13 2,6"/>
-          </svg>
-          Cover Letter
-        </button>
-        <button class="nav-item" data-tab="networking">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
-            <circle cx="9" cy="7" r="4"/>
-            <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
-            <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
-          </svg>
-          Networking
-        </button>
-        <button class="nav-item" data-tab="salary">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <line x1="12" y1="1" x2="12" y2="23"/>
-            <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
-          </svg>
-          Salary
-        </button>
+        <a class="active">Tracker</a>
+        <a href="options.html" target="_blank">Profiles</a>
+        <a href="options.html" target="_blank">Answers</a>
+        <a href="options.html" target="_blank">AI</a>
+        <a href="options.html" target="_blank">Settings</a>
       </nav>
+      <span class="spacer"></span>
+      <span class="me" id="me-initials">·</span>
     </div>
-  </header>
-    
-  <!-- Main Content -->
-  <main class="main-container">
-    <!-- Overview Tab -->
-    <div id="overview-tab" class="tab-content active">
-      <div class="stats-grid">
-        <div class="stat-card">
-          <div class="stat-label">Total Applications</div>
-          <div class="stat-value" id="stat-total">0</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-label">Response Rate</div>
-          <div class="stat-value" id="stat-response">0%</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-label">Interview Rate</div>
-          <div class="stat-value" id="stat-interview">0%</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-label">Offers</div>
-          <div class="stat-value" id="stat-offers">0</div>
-        </div>
+
+    <!-- Greeting -->
+    <div class="greeting-row">
+      <div>
+        <h1 id="greeting">Good afternoon</h1>
+        <p class="greeting-sub" id="greeting-sub">Your applications, tracked automatically.</p>
       </div>
-      
-      <div class="grid-2">
-        <div class="card">
-          <div class="card-header">
-            <div class="card-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <circle cx="12" cy="12" r="10"/>
-                <line x1="12" y1="16" x2="12" y2="12"/>
-                <line x1="12" y1="8" x2="12.01" y2="8"/>
-              </svg>
-            </div>
-            <div>
-              <h2 class="card-title">AI Suggestions</h2>
-              <p class="card-subtitle">Personalized recommendations</p>
-            </div>
-          </div>
-          <div id="suggestions-list">
-            <div class="empty-state">
-              <p>Start tracking applications to get personalized suggestions!</p>
-            </div>
-          </div>
-        </div>
-        
-        <div class="card">
-          <div class="card-header">
-            <div class="card-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <circle cx="12" cy="12" r="10"/>
-                <polyline points="12 6 12 12 16 14"/>
-              </svg>
-            </div>
-            <div>
-              <h2 class="card-title">Upcoming Actions</h2>
-              <p class="card-subtitle">Interviews and follow-ups</p>
-            </div>
-          </div>
-          <div id="upcoming-list">
-            <div class="empty-state">
-              <p>No upcoming interviews or follow-ups</p>
-            </div>
-          </div>
-        </div>
+      <div class="trackbox">
+        <input type="url" id="track-url" placeholder="paste a job link…">
+        <button class="btn-lime" id="track-btn">Track job</button>
       </div>
     </div>
-    
-    <!-- Applications Tab -->
-    <div id="applications-tab" class="tab-content">
-      <div class="card">
-        <div class="card-header">
-          <div class="card-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <line x1="12" y1="5" x2="12" y2="19"/>
-              <line x1="5" y1="12" x2="19" y2="12"/>
-            </svg>
-          </div>
-          <div>
-            <h2 class="card-title">Track Application</h2>
-            <p class="card-subtitle">Add a new job application to track</p>
-          </div>
+
+    <!-- Stats -->
+    <div class="stats-row">
+      <div class="stats">
+        <div class="stat">
+          <span class="stat-label">Applications this week</span>
+          <div class="stat-inline"><span class="stat-value" id="stat-week">0</span><span class="stat-sub" id="stat-total-sub">of 0 total</span></div>
+          <div class="week-dots" id="week-dots"></div>
         </div>
-        
-        <div class="form-grid">
-          <div class="form-group">
-            <label class="form-label">Company</label>
-            <input type="text" id="app-company" class="form-input" placeholder="e.g., Google">
-          </div>
-          <div class="form-group">
-            <label class="form-label">Position</label>
-            <input type="text" id="app-position" class="form-input" placeholder="e.g., Software Engineer">
-          </div>
-          <div class="form-group">
-            <label class="form-label">Status</label>
-            <select id="app-status" class="form-select">
-              <option value="saved">Saved</option>
-              <option value="applied">Applied</option>
-              <option value="interviewing">Interviewing</option>
-              <option value="offered">Offered</option>
-              <option value="rejected">Rejected</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label class="form-label">Source</label>
-            <input type="text" id="app-source" class="form-input" placeholder="e.g., LinkedIn, Indeed">
-          </div>
-          <div class="form-group full-width">
-            <label class="form-label">Job URL</label>
-            <input type="text" id="app-url" class="form-input" placeholder="https://...">
+        <div class="stat-divider"></div>
+        <div class="stat">
+          <span class="stat-label">Response rate</span>
+          <div class="stat-inline"><span class="stat-value" id="stat-response">0</span><span style="font-size:20px;color:var(--text-dim)">%</span></div>
+          <span class="stat-sub" id="stat-response-sub">No responses yet</span>
         </div>
-          <div class="form-group full-width">
-            <label class="form-label">Notes</label>
-            <textarea id="app-notes" class="form-textarea" placeholder="Any notes about this application..."></textarea>
-        </div>
+        <div class="stat-divider"></div>
+        <div class="stat">
+          <span class="stat-label">Follow-ups due</span>
+          <div class="stat-inline"><span class="stat-value amber" id="stat-followups">0</span><span class="stat-sub">this week</span></div>
+          <span class="stat-sub">Nudged when an application goes quiet for 10 days</span>
         </div>
       </div>
-      
-      <div class="card">
-        <div class="card-header">
-          <div class="card-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-              <polyline points="14 2 14 8 20 8"/>
-            </svg>
-          </div>
-          <div>
-            <h2 class="card-title">Your Applications</h2>
-            <p class="card-subtitle">Track your job search progress</p>
-          </div>
+      <div class="nextup" id="nextup">
+        <div style="display:flex;align-items:flex-start;gap:12px">
+          <span class="nextup-label">Next up</span>
+          <span class="nextup-icon">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="#c9f24d" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 11.5l7-7M6 4.5h5.5V10"></path></svg>
+          </span>
         </div>
-        <ul class="application-list" id="application-list">
-          <li class="empty-state">
-            <div class="empty-state-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-              </svg>
-            </div>
-            <h3>No applications tracked</h3>
-            <p>Add your first application above</p>
-          </li>
-        </ul>
+        <div class="nextup-title grotesk" id="nextup-title">Nothing scheduled — keep applying</div>
+        <span class="nextup-sub" id="nextup-sub">Interviews and follow-ups land here automatically.</span>
       </div>
     </div>
-    
-    <!-- Job Analyzer Tab -->
-    <div id="job-analyzer-tab" class="tab-content">
-      <div class="card">
-        <div class="card-header">
-          <div class="card-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <circle cx="11" cy="11" r="8"/>
-              <line x1="21" y1="21" x2="16.65" y2="16.65"/>
-            </svg>
-          </div>
-          <div>
-            <h2 class="card-title">Analyze Job Posting</h2>
-            <p class="card-subtitle">Get AI-powered insights and match score</p>
-          </div>
-        </div>
-        
-        <div class="info-banner">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="12" r="10"/>
-            <path d="M12 16v-4"/>
-            <path d="M12 8h.01"/>
-          </svg>
-          <p>Paste a job description to analyze fit, identify keywords, and get personalized recommendations based on your profile.</p>
-        </div>
-        
-        <div class="form-group">
-          <label class="form-label">Job Description</label>
-          <textarea id="job-description" class="form-textarea" rows="10" placeholder="Paste the full job description here..."></textarea>
-        </div>
-        <div id="job-analysis-result"></div>
+
+    <!-- Pipeline -->
+    <div class="pipeline">
+      <div class="pipeline-head">
+        <span class="pipeline-title">Your pipeline</span>
+        <span class="spacer"></span>
+        <span class="pipeline-count" id="pipeline-count">0 applications</span>
+      </div>
+      <div class="chips">
+        <div class="chip" style="flex:2;min-width:150px"><span class="chip-label">Saved</span><span class="chip-value" id="chip-saved">0</span></div>
+        <div class="chip referral"><span class="chip-label">Referral sent</span><span class="chip-value" id="chip-referral">0</span></div>
+        <div class="chip applied"><span class="chip-label">Applied</span><span class="chip-value" id="chip-applied">0</span></div>
+        <div class="chip interview"><span class="chip-label">Interview</span><span class="chip-value" id="chip-interview">0</span></div>
+        <div class="chip offer"><span class="chip-label">Offer</span><span class="chip-value" id="chip-offer">0</span></div>
+        <div class="chip rejected"><span class="chip-label">Rejected</span><span class="chip-value" id="chip-rejected">0</span></div>
       </div>
     </div>
-    
-    <!-- ATS Optimizer Tab -->
-    <div id="ats-optimizer-tab" class="tab-content">
-      <div class="card">
-        <div class="card-header">
-          <div class="card-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M12 20h9"/>
-              <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
-            </svg>
-          </div>
-          <div>
-            <h2 class="card-title">Optimize Resume for ATS</h2>
-            <p class="card-subtitle">Score and optimize for Applicant Tracking Systems</p>
-          </div>
+
+    <!-- Applications + detail -->
+    <div class="apps-wrap">
+      <div class="apps">
+        <div class="apps-head">
+          <span class="apps-title">Applications</span>
+          <button class="filter active" data-filter="all">All</button>
+          <button class="filter" data-filter="active">Active</button>
+          <button class="filter" data-filter="interviewing">Interview</button>
         </div>
-        
-        <div class="info-banner">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="12" r="10"/>
-            <path d="M12 16v-4"/>
-            <path d="M12 8h.01"/>
-          </svg>
-          <p>Paste the target job description to optimize your resume with the right keywords and format for ATS systems.</p>
+        <div class="app-list" id="app-list">
+          <div class="empty-apps">No applications yet — Fill All on any job page logs it here automatically.</div>
         </div>
-        
-        <div class="form-group">
-          <label class="form-label">Target Job Description</label>
-          <textarea id="ats-job-description" class="form-textarea" rows="8" placeholder="Paste the job description you're applying to..."></textarea>
-        </div>
-        <div id="ats-result"></div>
+      </div>
+      <div class="detail" id="detail">
+        <div class="detail-empty">Select an application to see its story.</div>
       </div>
     </div>
-    
-    <!-- Interview Prep Tab -->
-    <div id="interview-prep-tab" class="tab-content">
-      <div class="card">
-        <div class="card-header">
-          <div class="card-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-            </svg>
-          </div>
-          <div>
-            <h2 class="card-title">Mock Interview Prep</h2>
-            <p class="card-subtitle">Generate personalized interview questions with AI answers</p>
-          </div>
-        </div>
-        
-        <div class="form-grid">
-          <div class="form-group">
-            <label class="form-label">Job Title</label>
-            <input type="text" id="interview-title" class="form-input" placeholder="e.g., Senior Software Engineer">
-          </div>
-          <div class="form-group">
-            <label class="form-label">Company</label>
-            <input type="text" id="interview-company" class="form-input" placeholder="e.g., Meta">
-          </div>
-          <div class="form-group full-width">
-            <label class="form-label">Job Description (optional)</label>
-            <textarea id="interview-jd" class="form-textarea" rows="4" placeholder="Paste job description for more relevant questions..."></textarea>
-        </div>
-        </div>
-        <div id="interview-result"></div>
-      </div>
-    </div>
-    
-    <!-- Cover Letter Tab -->
-    <div id="cover-letter-tab" class="tab-content">
-      <div class="card">
-        <div class="card-header">
-          <div class="card-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
-              <polyline points="22,6 12,13 2,6"/>
-            </svg>
-          </div>
-          <div>
-            <h2 class="card-title">AI Cover Letter Generator</h2>
-            <p class="card-subtitle">Generate a compelling, personalized cover letter</p>
-          </div>
-        </div>
-        
-        <div class="form-grid">
-        <div class="form-group">
-            <label class="form-label">Job Title</label>
-            <input type="text" id="cl-title" class="form-input" placeholder="e.g., Product Manager">
-        </div>
-        <div class="form-group">
-            <label class="form-label">Company</label>
-            <input type="text" id="cl-company" class="form-input" placeholder="e.g., Stripe">
-        </div>
-          <div class="form-group full-width">
-            <label class="form-label">Hiring Manager (optional)</label>
-            <input type="text" id="cl-manager" class="form-input" placeholder="e.g., John Smith">
-          </div>
-          <div class="form-group full-width">
-            <label class="form-label">Job Description</label>
-            <textarea id="cl-jd" class="form-textarea" rows="6" placeholder="Paste the job description..."></textarea>
-          </div>
-        </div>
-        <button class="btn btn-primary" id="generate-cover-letter">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
-            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
-          </svg>
-          Generate Cover Letter
-        </button>
-        <div id="cover-letter-result"></div>
-      </div>
-    </div>
-    
-    <!-- Networking Tab -->
-    <div id="networking-tab" class="tab-content">
-      <div class="card">
-        <div class="card-header">
-          <div class="card-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
-              <circle cx="9" cy="7" r="4"/>
-              <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
-              <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
-            </svg>
-          </div>
-          <div>
-            <h2 class="card-title">LinkedIn Message Generator</h2>
-            <p class="card-subtitle">Craft personalized networking messages that get responses</p>
-          </div>
-        </div>
-        
-        <div class="form-grid">
-        <div class="form-group">
-            <label class="form-label">Recipient's Role</label>
-            <input type="text" id="net-role" class="form-input" placeholder="e.g., Engineering Manager">
-          </div>
-          <div class="form-group">
-            <label class="form-label">Recipient's Company</label>
-            <input type="text" id="net-company" class="form-input" placeholder="e.g., Airbnb">
-          </div>
-          <div class="form-group full-width">
-            <label class="form-label">Purpose</label>
-            <select id="net-purpose" class="form-select">
-            <option value="connection">Connection Request</option>
-            <option value="referral">Ask for Referral</option>
-            <option value="informational">Informational Interview</option>
-            <option value="followup">Follow Up</option>
-          </select>
-        </div>
-        </div>
-        <div id="networking-result"></div>
-      </div>
-    </div>
-    
-    <!-- Salary Tab -->
-    <div id="salary-tab" class="tab-content">
-      <div class="card">
-        <div class="card-header">
-          <div class="card-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <line x1="12" y1="1" x2="12" y2="23"/>
-              <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
-            </svg>
-          </div>
-          <div>
-            <h2 class="card-title">Salary Insights & Negotiation</h2>
-            <p class="card-subtitle">Get market salary data and negotiation strategies</p>
-          </div>
-        </div>
-        
-        <div class="form-grid">
-          <div class="form-group">
-            <label class="form-label">Job Title</label>
-            <input type="text" id="salary-title" class="form-input" placeholder="e.g., Data Scientist">
-          </div>
-          <div class="form-group">
-            <label class="form-label">Company</label>
-            <input type="text" id="salary-company" class="form-input" placeholder="e.g., Netflix">
-          </div>
-          <div class="form-group">
-            <label class="form-label">Location</label>
-            <input type="text" id="salary-location" class="form-input" placeholder="e.g., San Francisco, CA">
-          </div>
-          <div class="form-group">
-            <label class="form-label">Years of Experience</label>
-            <input type="text" id="salary-experience" class="form-input" placeholder="e.g., 5">
-          </div>
-        </div>
-        <div id="salary-result"></div>
-      </div>
-    </div>
-  </main>
-  
+  </div>
+
   <script src="dashboard.js"></script>
 </body>
 </html>

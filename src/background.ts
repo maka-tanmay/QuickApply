@@ -47,22 +47,45 @@ let applications: Application[] = [];
 let settings = {
   enabled: true,
   extensionEnabled: true, // Master on/off toggle
+  autoScan: true, // Auto-scan recognized ATS pages without opening the popup
   activeProfileId: null as string | null,
   openrouterApiKey: '',
   perplexityApiKey: '',
   deepseekApiKey: '',
   aiEnabled: false,
-  aiProvider: 'openrouter' as 'openrouter' | 'perplexity' | 'deepseek',
+  aiProvider: 'openrouter' as 'openrouter' | 'perplexity' | 'deepseek' | 'claude-cli',
   openrouterModel: 'google/gemma-2-9b-it:free',
   perplexityModel: 'sonar',
   deepseekModel: 'deepseek-chat',
   aiModel: 'sonar' // Legacy
 };
 
+// Claude Code CLI bridge - talks to the local `claude` binary via native messaging.
+// No API key, no per-token billing; uses the user's Claude subscription.
+const CLAUDE_NATIVE_HOST = 'com.quickapply.claude';
+
+function callClaudeCLI(messages: Array<{role: string; content: string}>, maxTokens: number): Promise<string> {
+  return new Promise((resolve, reject) => {
+    chrome.runtime.sendNativeMessage(CLAUDE_NATIVE_HOST, { messages, maxTokens }, (response) => {
+      if (chrome.runtime.lastError) {
+        reject(new Error(`Claude CLI bridge not reachable (${chrome.runtime.lastError.message}). Run native-host/install.sh and restart Chrome.`));
+      } else if (response?.error) {
+        reject(new Error(`Claude CLI error: ${response.error}`));
+      } else {
+        resolve(response?.content || '');
+      }
+    });
+  });
+}
+
 // Centralized AI API call function
 async function callAI(messages: Array<{role: string; content: string}>, maxTokens: number = 2000): Promise<string> {
   const provider = settings.aiProvider || 'openrouter';
-  
+
+  if (provider === 'claude-cli') {
+    return callClaudeCLI(messages, maxTokens);
+  }
+
   let url: string;
   let apiKey: string;
   let model: string;
@@ -124,6 +147,7 @@ async function callAI(messages: Array<{role: string; content: string}>, maxToken
 function isAIAvailable(): boolean {
   if (!settings.aiEnabled) return false;
   const provider = settings.aiProvider || 'openrouter';
+  if (provider === 'claude-cli') return true; // no key needed
   if (provider === 'openrouter') {
     return !!settings.openrouterApiKey;
   } else if (provider === 'deepseek') {
@@ -135,6 +159,7 @@ function isAIAvailable(): boolean {
 // Get current AI provider name
 function getAIProviderName(): string {
   const provider = settings.aiProvider || 'openrouter';
+  if (provider === 'claude-cli') return 'Claude Code CLI';
   if (provider === 'openrouter') return 'OpenRouter';
   if (provider === 'deepseek') return 'DeepSeek';
   return 'Perplexity';
@@ -258,6 +283,13 @@ chrome.runtime.onInstalled.addListener(() => {
 loadFromStorage();
 
 // Message handler
+// Keyboard shortcut (Alt+Shift+F by default) — scan without opening the popup
+chrome.commands?.onCommand.addListener(async (command) => {
+  if (command !== 'scan-page') return;
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (tab?.id) chrome.tabs.sendMessage(tab.id, { type: 'scan' });
+});
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   console.log('JobRight AI Background: Message:', message.type);
   
@@ -324,6 +356,7 @@ async function handleMessage(message: any): Promise<any> {
     case 'getSettings':
       return {
         enabled: settings.enabled,
+        autoScan: settings.autoScan !== false,
         activeProfileId: settings.activeProfileId,
         aiEnabled: settings.aiEnabled,
         aiProvider: settings.aiProvider || 'openrouter',
@@ -333,9 +366,10 @@ async function handleMessage(message: any): Promise<any> {
         hasOpenRouterKey: !!(settings.openrouterApiKey && settings.openrouterApiKey.length > 0),
         hasPerplexityKey: !!(settings.perplexityApiKey && settings.perplexityApiKey.length > 0),
         hasDeepSeekKey: !!(settings.deepseekApiKey && settings.deepseekApiKey.length > 0),
-        // Legacy compatibility
-        hasApiKey: !!(settings.openrouterApiKey && settings.openrouterApiKey.length > 0) || 
-                   !!(settings.perplexityApiKey && settings.perplexityApiKey.length > 0) || 
+        // Legacy compatibility (claude-cli needs no key)
+        hasApiKey: settings.aiProvider === 'claude-cli' ||
+                   !!(settings.openrouterApiKey && settings.openrouterApiKey.length > 0) ||
+                   !!(settings.perplexityApiKey && settings.perplexityApiKey.length > 0) ||
                    !!(settings.deepseekApiKey && settings.deepseekApiKey.length > 0),
         aiModel: settings.perplexityModel || settings.aiModel
       };
@@ -348,6 +382,9 @@ async function handleMessage(message: any): Promise<any> {
       }
       if (message.settings.extensionEnabled !== undefined) {
         settings.extensionEnabled = message.settings.extensionEnabled;
+      }
+      if (message.settings.autoScan !== undefined) {
+        settings.autoScan = message.settings.autoScan;
       }
       if (message.settings.activeProfileId !== undefined) {
         settings.activeProfileId = message.settings.activeProfileId;
@@ -615,6 +652,15 @@ Return ONLY the JSON object, no other text.`;
     case 'testApiKey': {
       try {
         const provider = message.provider || 'openrouter';
+
+        if (provider === 'claude-cli') {
+          try {
+            const reply = await callClaudeCLI([{ role: 'user', content: 'Reply with the single word: ok' }], 10);
+            return reply ? { success: true } : { success: false, error: 'Empty response from Claude CLI' };
+          } catch (error) {
+            return { success: false, error: String(error) };
+          }
+        }
         let url: string;
         let body: any;
         let headers: Record<string, string> = {
@@ -677,6 +723,11 @@ Return ONLY the JSON object, no other text.`;
       return applications;
 
     case 'saveApplication': {
+      // Same URL = same application; update instead of duplicating (repeat fills, multi-step forms)
+      if (!message.application.id && message.application.url) {
+        const existing = applications.find(a => a.url === message.application.url);
+        if (existing) message.application.id = existing.id;
+      }
       const app: Application = {
         ...message.application,
         id: message.application.id || generateId(),
@@ -1213,6 +1264,7 @@ async function saveToStorage() {
     const settingsToSave = {
       enabled: settings.enabled,
       extensionEnabled: settings.extensionEnabled,
+      autoScan: settings.autoScan,
       activeProfileId: settings.activeProfileId,
       // Save API keys exactly as they are (don't convert to empty string)
       openrouterApiKey: settings.openrouterApiKey,

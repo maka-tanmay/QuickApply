@@ -204,7 +204,9 @@ async function loadAISettings() {
     }
     
     // Show status based on active provider
-    if (provider === 'openrouter' && settings.hasOpenRouterKey) {
+    if (provider === 'claude-cli') {
+      updateAIStatus('✓ Claude Code CLI — no API key needed (requires native host install)', 'success');
+    } else if (provider === 'openrouter' && settings.hasOpenRouterKey) {
       updateAIStatus('✓ OpenRouter API key configured', 'success');
     } else if (provider === 'perplexity' && settings.hasPerplexityKey) {
       updateAIStatus('✓ Perplexity API key configured', 'success');
@@ -217,22 +219,14 @@ async function loadAISettings() {
 }
 
 function toggleProviderSettings(provider) {
-  const openrouterSettings = document.getElementById('openrouter-settings');
-  const perplexitySettings = document.getElementById('perplexity-settings');
-  const deepseekSettings = document.getElementById('deepseek-settings');
-  
-  // Hide all
-  openrouterSettings.style.display = 'none';
-  perplexitySettings.style.display = 'none';
-  deepseekSettings.style.display = 'none';
-  
-  // Show selected
-  if (provider === 'openrouter') {
-    openrouterSettings.style.display = 'block';
-  } else if (provider === 'perplexity') {
-    perplexitySettings.style.display = 'block';
-  } else if (provider === 'deepseek') {
-    deepseekSettings.style.display = 'block';
+  const panels = {
+    'claude-cli': document.getElementById('claude-cli-settings'),
+    openrouter: document.getElementById('openrouter-settings'),
+    perplexity: document.getElementById('perplexity-settings'),
+    deepseek: document.getElementById('deepseek-settings'),
+  };
+  for (const [name, panel] of Object.entries(panels)) {
+    if (panel) panel.style.display = name === provider ? 'block' : 'none';
   }
 }
 
@@ -241,6 +235,47 @@ function setupAIEventListeners() {
     toggleProviderSettings(e.target.value);
   });
   document.getElementById('save-ai-settings')?.addEventListener('click', saveAISettings);
+  document.getElementById('save-ats-account')?.addEventListener('click', saveAtsAccount);
+  loadAtsAccount();
+}
+
+// ===== ATS account credentials (create-account / sign-in walls) =====
+async function loadAtsAccount() {
+  try {
+    const acc = await chrome.storage.local.get(['qaAccountEmail', 'qaAccountPassword', 'qaAccounts']);
+    const emailEl = document.getElementById('ats-account-email');
+    const passEl = document.getElementById('ats-account-password');
+    if (emailEl && acc.qaAccountEmail) emailEl.value = acc.qaAccountEmail;
+    if (passEl && acc.qaAccountPassword) passEl.placeholder = '•••••••••• (saved)';
+
+    const domainsEl = document.getElementById('ats-account-domains');
+    const domains = Object.keys(acc.qaAccounts || {});
+    if (domainsEl) {
+      domainsEl.textContent = domains.length
+        ? `Accounts created on: ${domains.join(', ')}`
+        : 'No company accounts registered yet — they are recorded automatically when QuickApply fills a sign-up page.';
+    }
+  } catch (e) {
+    console.error('Error loading ATS account:', e);
+  }
+}
+
+async function saveAtsAccount() {
+  const email = document.getElementById('ats-account-email')?.value.trim() || '';
+  const password = document.getElementById('ats-account-password')?.value || '';
+  const status = document.getElementById('ats-account-status');
+  try {
+    const updates = {};
+    if (email) updates.qaAccountEmail = email;
+    if (password && !password.includes('•')) updates.qaAccountPassword = password;
+    await chrome.storage.local.set(updates);
+    const passEl = document.getElementById('ats-account-password');
+    if (passEl && password) { passEl.value = ''; passEl.placeholder = '•••••••••• (saved)'; }
+    if (status) { status.textContent = '✓ Account saved'; status.style.color = '#10b981'; }
+    showMessage('ATS account saved', 'success');
+  } catch (e) {
+    if (status) { status.textContent = '✗ Error saving account'; status.style.color = '#ef4444'; }
+  }
 }
 
 // Learning Data Functions

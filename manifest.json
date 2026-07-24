@@ -6,13 +6,20 @@
   "permissions": [
     "activeTab",
     "storage",
-    "scripting"
+    "scripting",
+    "nativeMessaging"
   ],
   "host_permissions": [
     "http://*/*",
     "https://*/*",
     "file://*/*"
   ],
+  "commands": {
+    "scan-page": {
+      "suggested_key": { "default": "Alt+Shift+F" },
+      "description": "Scan & autofill the current page"
+    }
+  },
   "background": {
     "service_worker": "dist/background.js",
     "type": "module"

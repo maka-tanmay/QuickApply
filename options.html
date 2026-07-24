@@ -1019,13 +1019,22 @@ Python, JavaScript, React, AWS, Docker, PostgreSQL"></textarea>
         <div class="form-group" style="margin-top: var(--space-xl);">
           <label class="form-label">AI Provider</label>
           <select id="ai-provider" class="form-select">
+            <option value="claude-cli">Claude Code CLI (local, no API key)</option>
             <option value="openrouter">OpenRouter (Free Models Available)</option>
             <option value="perplexity">Perplexity AI</option>
             <option value="deepseek">DeepSeek</option>
           </select>
           <p class="form-hint">Choose your preferred AI provider</p>
         </div>
-        
+
+        <!-- Claude CLI Settings -->
+        <div id="claude-cli-settings" style="display: none;">
+          <div class="form-group">
+            <p class="form-hint">Uses your locally installed <strong>Claude Code</strong> CLI via a native messaging bridge — no API key, no per-token cost (covered by your Claude subscription).</p>
+            <p class="form-hint">One-time setup: in a terminal, run <code>native-host/install.sh &lt;extension-id&gt;</code> from the QuickApply folder (your extension ID is shown at <code>chrome://extensions</code>), then restart Chrome.</p>
+          </div>
+        </div>
+
         <!-- OpenRouter Settings -->
         <div id="openrouter-settings">
           <div class="form-group">
@@ -1102,7 +1111,36 @@ Python, JavaScript, React, AWS, Docker, PostgreSQL"></textarea>
           Save AI Settings
           </button>
         </div>
-        
+
+      <!-- ATS Account Credentials Card -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+              <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+            </svg>
+          </div>
+          <div>
+            <h2 class="card-title">ATS Account</h2>
+            <p class="card-subtitle">Workday &amp; co. force an account per company — store one login and QuickApply fills every create-account and sign-in wall</p>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Account Email</label>
+          <input type="email" id="ats-account-email" class="form-input" placeholder="you@university.edu">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Account Password</label>
+          <input type="password" id="ats-account-password" class="form-input" placeholder="••••••••••">
+          <p class="form-hint">Stored only in this browser's extension storage, shown as dots in the panel, and never sent to any AI or server. Use a password you don't use anywhere else.</p>
+        </div>
+        <div id="ats-account-domains" class="form-hint" style="margin-bottom: var(--space-md);"></div>
+        <div id="ats-account-status"></div>
+        <button type="button" id="save-ats-account" class="btn btn-primary">Save Account</button>
+      </div>
+
       <!-- AI Learning Card -->
       <div class="card">
         <div class="card-header">

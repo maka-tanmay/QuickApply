@@ -3,518 +3,264 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>JobRight AI</title>
+  <title>QuickApply</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&display=swap" rel="stylesheet">
   <style>
-    /* Popup-specific overrides */
+    /* QuickApply design system — dark, lime accent (see DESIGN_BRIEF.md) */
+    :root {
+      --lime: #c9f24d;
+      --lime-hover: #d8ff63;
+      --on-lime: #0b1004;
+      --canvas: #111111;
+      --surface: #181817;
+      --raised: #1e1e1c;
+      --border: #242423;
+      --border-2: #2a2a28;
+      --border-3: #2e2e2b;
+      --text: #f4f4f2;
+      --text-2: #c4c4bf;
+      --text-dim: #8a8a86;
+      --text-faint: #6c6c68;
+      --amber: #f0b429;
+    }
+    * { box-sizing: border-box; margin: 0; }
     body {
       width: 360px;
+      background: var(--canvas);
+      color: var(--text);
+      font-family: "DM Sans", -apple-system, BlinkMacSystemFont, sans-serif;
+      -webkit-font-smoothing: antialiased;
+      font-size: 13px;
       overflow-x: hidden;
     }
+    button { font-family: inherit; }
+    ::selection { background: var(--lime); color: var(--on-lime); }
 
-    .header {
-      padding: 16px 20px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      border-bottom: 1px solid var(--color-border);
+    /* Header */
+    .header { padding: 16px 16px 14px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid var(--border); }
+    .logo {
+      width: 30px; height: 30px; border-radius: 10px; background: var(--lime); color: var(--on-lime);
+      font-size: 15px; font-weight: 700; display: flex; align-items: center; justify-content: center;
+      font-family: "Space Grotesk", sans-serif; flex: none;
     }
-
-    .content {
-      padding: 20px;
+    .brand-name { flex: 1; font-size: 15px; font-weight: 600; color: #f7f7f4; font-family: "Space Grotesk", sans-serif; }
+    .status-pill {
+      font-size: 11px; font-weight: 600; color: var(--lime);
+      background: rgba(201,242,77,.12); border: 1px solid rgba(201,242,77,.28);
+      border-radius: 999px; padding: 4px 10px;
     }
+    .status-pill.inactive { color: var(--amber); background: rgba(240,180,41,.12); border-color: rgba(240,180,41,.26); }
 
-    /* Profile Selector */
-    .profile-selector {
-      margin-bottom: 16px;
+    .toggle-switch { position: relative; width: 38px; height: 22px; flex: none; }
+    .toggle-switch input { opacity: 0; width: 0; height: 0; }
+    .toggle-track { position: absolute; cursor: pointer; inset: 0; background: #2a2a28; border-radius: 999px; transition: .18s ease; }
+    .toggle-track::before {
+      position: absolute; content: ""; height: 18px; width: 18px; left: 2px; top: 2px;
+      background: var(--text-faint); border-radius: 999px; transition: .18s ease;
     }
+    .toggle-switch input:checked + .toggle-track { background: var(--lime); }
+    .toggle-switch input:checked + .toggle-track::before { transform: translateX(16px); background: var(--on-lime); }
+    .toggle-switch input:focus-visible + .toggle-track { box-shadow: 0 0 0 2px var(--canvas), 0 0 0 4px var(--lime); }
 
-    .selector-label {
-      font-size: 11px;
-      font-weight: 600;
-      color: var(--color-text-muted);
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      margin-bottom: 8px;
-      display: block;
-    }
+    .content { padding: 14px 16px; }
 
-    .selector-wrapper {
-      position: relative;
-    }
+    /* Paused state */
+    .disabled-state { display: none; }
+    .extension-disabled .disabled-state { display: flex; flex-direction: column; gap: 14px; }
+    .extension-disabled .enabled-state { display: none; }
+    .paused-banner { display: flex; gap: 10px; background: rgba(240,180,41,.07); border: 1px solid rgba(240,180,41,.22); border-radius: 12px; padding: 12px; }
+    .paused-banner svg { flex: none; margin-top: 1px; }
+    .paused-title { font-size: 13px; font-weight: 600; color: var(--text); }
+    .paused-sub { font-size: 12px; line-height: 1.5; color: #b5a682; margin-top: 3px; }
+    .paused-ghost { opacity: .38; display: flex; flex-direction: column; gap: 12px; pointer-events: none; }
 
+    /* Profile selector */
+    .selector-wrapper { position: relative; margin-bottom: 14px; }
     .selector-wrapper select {
-      width: 100%;
-      padding: 12px 16px;
-      padding-right: 40px;
-      background: var(--color-bg-elevated);
-      border: 1px solid var(--color-border);
-      border-radius: 10px;
-      color: var(--color-text-primary);
-      font-family: inherit;
-      font-size: 13px;
-      font-weight: 500;
-      cursor: pointer;
-      appearance: none;
-      transition: 0.2s ease;
+      width: 100%; appearance: none; cursor: pointer;
+      background: var(--surface); border: 1px solid var(--border-2); border-radius: 12px;
+      padding: 10px 34px 10px 12px; color: var(--text); font-family: inherit; font-size: 13px; font-weight: 600;
     }
-
-    .selector-wrapper select:focus {
-      outline: none;
-      border-color: var(--color-accent);
-      box-shadow: 0 0 0 3px var(--color-accent-glow);
-    }
-
+    .selector-wrapper select:focus { outline: none; border-color: var(--lime); }
     .selector-wrapper::after {
-      content: '';
-      position: absolute;
-      right: 14px;
-      top: 50%;
-      transform: translateY(-50%);
-      width: 0;
-      height: 0;
-      border-left: 5px solid transparent;
-      border-right: 5px solid transparent;
-      border-top: 5px solid var(--color-text-muted);
-      pointer-events: none;
+      content: ""; position: absolute; right: 14px; top: 50%; transform: translateY(-25%);
+      width: 0; height: 0; border-left: 4px solid transparent; border-right: 4px solid transparent;
+      border-top: 4px solid var(--text-dim); pointer-events: none;
     }
 
-    /* Profile Card */
-    .profile-card {
-      background: var(--color-bg-card);
-      border: 1px solid var(--color-border);
-      border-radius: 14px;
-      padding: 16px;
-      margin-bottom: 16px;
-    }
-
-    .profile-header {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      margin-bottom: 12px;
-    }
-
+    /* Profile card */
+    .profile-card { background: var(--surface); border: 1px solid var(--border-2); border-radius: 14px; padding: 14px; margin-bottom: 14px; }
+    .profile-header { display: flex; align-items: center; gap: 11px; }
     .profile-avatar {
-      width: 44px;
-      height: 44px;
-      background: var(--color-accent-glow);
-      border-radius: 10px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 16px;
-      font-weight: 700;
-      color: var(--color-accent);
-      border: 1px solid var(--color-border);
+      width: 38px; height: 38px; border-radius: 12px; background: #2e3a12; color: var(--lime);
+      font-size: 14px; font-weight: 700; display: flex; align-items: center; justify-content: center;
+      font-family: "Space Grotesk", sans-serif; flex: none;
     }
+    .profile-info { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+    .profile-name { font-size: 14px; font-weight: 600; color: var(--text); }
+    .profile-email { font-size: 12px; color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .profile-completeness { margin-top: 12px; display: flex; flex-direction: column; gap: 7px; }
+    .completeness-header { display: flex; align-items: baseline; gap: 6px; }
+    .completeness-label { font-size: 12px; color: var(--text-dim); flex: 1; }
+    .completeness-value { font-size: 13px; font-weight: 700; color: var(--lime); font-family: "Space Grotesk", sans-serif; }
+    .completeness-bar { height: 6px; border-radius: 999px; background: var(--border); overflow: hidden; }
+    .completeness-fill { display: block; height: 100%; background: var(--lime); border-radius: 999px; transition: width .4s ease; }
+    .completeness-hint { font-size: 11.5px; color: #7c7c78; }
 
-    .profile-info {
-      flex: 1;
-    }
-
-    .profile-name {
-      font-size: 14px;
-      font-weight: 600;
-      margin-bottom: 2px;
-    }
-
-    .profile-email {
-      font-size: 12px;
-      color: var(--color-text-muted);
-    }
-
-    .profile-completeness {
-      margin-top: 12px;
-    }
-
-    .completeness-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 6px;
-    }
-
-    .completeness-label {
-      font-size: 11px;
-      font-weight: 600;
-      color: var(--color-text-secondary);
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-    }
-
-    .completeness-value {
-      font-size: 12px;
-      font-weight: 600;
-      color: var(--color-accent);
-    }
-
-    .completeness-bar {
-      height: 4px;
-      background: var(--color-bg-primary);
-      border-radius: 4px;
-      overflow: hidden;
-    }
-
-    .completeness-fill {
-      height: 100%;
-      background: linear-gradient(90deg, var(--color-accent), var(--color-accent-light));
-      border-radius: 4px;
-      transition: width 0.5s ease;
-    }
-
-    /* No Profile State */
-    .no-profile {
-      text-align: center;
-      padding: 20px 16px;
-    }
-
+    /* No profile */
+    .no-profile { display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center; padding: 16px 6px; }
     .no-profile-icon {
-      width: 48px;
-      height: 48px;
-      background: var(--color-accent-glow);
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      margin: 0 auto 12px;
+      width: 56px; height: 56px; border-radius: 18px; background: var(--surface);
+      border: 1px solid var(--border-2); display: flex; align-items: center; justify-content: center;
     }
+    .no-profile h3 { font-family: "Space Grotesk", sans-serif; font-size: 19px; font-weight: 600; color: #f7f7f4; letter-spacing: -.01em; }
+    .no-profile p { font-size: 13px; line-height: 1.6; color: var(--text-dim); max-width: 32ch; }
+    .no-profile .alt { font-size: 12px; color: var(--text-faint); }
+    .no-profile .alt span { color: var(--lime); font-weight: 600; cursor: pointer; }
 
-    .no-profile-icon svg {
-      width: 24px;
-      height: 24px;
-      color: var(--color-accent);
+    /* Buttons */
+    .actions { display: flex; flex-direction: column; gap: 8px; }
+    .btn-primary {
+      font-size: 13.5px; font-weight: 700; color: var(--on-lime); background: var(--lime);
+      border: none; border-radius: 999px; padding: 12px; cursor: pointer; width: 100%;
     }
+    .btn-primary:hover { background: var(--lime-hover); }
+    .btn-primary:disabled { color: #5c6a3a; background: #3a4520; cursor: default; }
+    .btn-primary:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--canvas), 0 0 0 4px var(--lime); }
+    .btn-row { display: flex; gap: 8px; }
+    .btn-secondary {
+      flex: 1; font-size: 13px; font-weight: 600; color: #e6e6e1; background: var(--raised);
+      border: 1px solid var(--border-3); border-radius: 999px; padding: 11px; cursor: pointer;
+    }
+    .btn-secondary:hover { background: #262624; }
+    .setting-row { display: flex; align-items: center; gap: 10px; padding: 4px 2px; }
+    .setting-row > span:first-child { font-size: 13px; color: var(--text-2); flex: 1; }
+    .toggle-switch { display: inline-block; flex: none; }
 
-    .no-profile h3 {
-      font-size: 14px;
-      font-weight: 600;
-      margin-bottom: 4px;
+    .spinner {
+      display: inline-block; width: 12px; height: 12px; border: 2px solid rgba(11,16,4,.3);
+      border-top-color: var(--on-lime); border-radius: 999px; animation: spin .7s linear infinite; vertical-align: -2px;
     }
-
-    .no-profile p {
-      font-size: 12px;
-      color: var(--color-text-muted);
-    }
-
-    /* Action Buttons */
-    .actions {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-    }
-
-    .btn-cover-letter {
-      background: linear-gradient(135deg, #10B981, #059669);
-      color: white;
-      box-shadow: 0 4px 12px rgba(16, 185, 129, 0.25);
-    }
-
-    .btn-cover-letter:hover {
-      transform: translateY(-1px);
-      box-shadow: 0 6px 16px rgba(16, 185, 129, 0.35);
-    }
+    @keyframes spin { to { transform: rotate(360deg); } }
 
     /* Footer */
-    .footer {
-      padding: 12px 20px;
-      border-top: 1px solid var(--color-border);
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
+    .footer { padding: 12px 16px; border-top: 1px solid var(--border); display: flex; align-items: center; gap: 12px; }
+    .footer-version { font-size: 11.5px; color: var(--text-faint); flex: 1; }
+    .footer-link { font-size: 12px; font-weight: 600; color: #9d9d98; text-decoration: none; cursor: pointer; }
+    .footer-link:hover { color: var(--text); }
 
-    .footer-version {
-      font-size: 10px;
-      color: var(--color-text-muted);
+    /* Toast (popup-internal, created by popup.js) */
+    .toast {
+      position: fixed; bottom: 14px; left: 14px; right: 14px; z-index: 10;
+      background: #14140f; border: 1px solid var(--border-3); border-left: 3px solid var(--lime);
+      border-radius: 12px; padding: 11px 13px; font-size: 13px; font-weight: 600; color: var(--text);
     }
-
-    .footer-links {
-      display: flex;
-      gap: 16px;
-    }
-
-    .footer-link {
-      font-size: 11px;
-      color: var(--color-text-muted);
-      text-decoration: none;
-      transition: 0.2s ease;
-    }
-
-    .footer-link:hover {
-      color: var(--color-accent);
-    }
-
-    /* Disabled State */
-    .disabled-state {
-      display: none;
-    }
-
-    .extension-disabled .disabled-state {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      text-align: center;
-      padding: 32px 20px;
-    }
-
-    .extension-disabled .enabled-state {
-      display: none;
-    }
-
-    .disabled-icon {
-      width: 56px;
-      height: 56px;
-      background: var(--color-bg-elevated);
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      margin-bottom: 16px;
-    }
-
-    .disabled-icon svg {
-      width: 28px;
-      height: 28px;
-      color: var(--color-text-muted);
-    }
-
-    .disabled-state h3 {
-      font-size: 15px;
-      font-weight: 600;
-      margin-bottom: 8px;
-    }
-
-    .disabled-state p {
-      font-size: 13px;
-      color: var(--color-text-muted);
-      line-height: 1.5;
-    }
-
-    /* Master Toggle */
-    .toggle-wrapper {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .status-pill {
-      display: flex;
-      align-items: center;
-      gap: 5px;
-      padding: 5px 10px;
-      background: var(--color-success-bg);
-      border-radius: 20px;
-      font-size: 11px;
-      font-weight: 600;
-      color: var(--color-success);
-    }
-
-    .status-pill.inactive {
-      background: var(--color-bg-elevated);
-      color: var(--color-text-muted);
-    }
-
-    .status-dot {
-      width: 6px;
-      height: 6px;
-      border-radius: 50%;
-      background: currentColor;
-      animation: pulse 2s ease-in-out infinite;
-    }
-
-    .status-pill.inactive .status-dot {
-      animation: none;
-    }
-
-    @keyframes pulse {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.5; }
-    }
-
-    .toggle-switch {
-      position: relative;
-      width: 44px;
-      height: 24px;
-    }
-
-    .toggle-switch input {
-      opacity: 0;
-      width: 0;
-      height: 0;
-    }
-
-    .toggle-track {
-      position: absolute;
-      cursor: pointer;
-      inset: 0;
-      background: var(--color-bg-elevated);
-      border-radius: 24px;
-      transition: 0.2s ease;
-      border: 1px solid var(--color-border);
-    }
-
-    .toggle-track::before {
-      position: absolute;
-      content: "";
-      height: 18px;
-      width: 18px;
-      left: 2px;
-      bottom: 2px;
-      background: var(--color-text-muted);
-      border-radius: 50%;
-      transition: 0.2s ease;
-    }
-
-    .toggle-switch input:checked + .toggle-track {
-      background: var(--color-accent);
-      border-color: var(--color-accent);
-    }
-
-    .toggle-switch input:checked + .toggle-track::before {
-      transform: translateX(20px);
-      background: white;
-    }
+    .toast-warning, .toast-error { border-left-color: var(--amber); }
   </style>
 </head>
 <body>
-  <div class="container">
-    <!-- Header -->
-    <header class="header">
-      <div class="brand">
-        <div class="brand-logo">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M12 2L2 7l10 5 10-5-10-5z"/>
-            <path d="M2 17l10 5 10-5"/>
-            <path d="M2 12l10 5 10-5"/>
-          </svg>
-        </div>
-        <div class="brand-text">
-          <h1>JobRight AI</h1>
-          <span>Career Copilot</span>
+  <!-- Header -->
+  <header class="header">
+    <span class="logo">Q</span>
+    <span class="brand-name">QuickApply</span>
+    <span class="status-pill" id="status-pill"><span id="status-text">Active</span></span>
+    <label class="toggle-switch">
+      <input type="checkbox" id="extension-toggle" checked>
+      <span class="toggle-track"></span>
+    </label>
+  </header>
+
+  <main class="content">
+    <!-- Paused state -->
+    <div class="disabled-state">
+      <div class="paused-banner">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#f0b429" stroke-width="1.7" stroke-linecap="round"><path d="M8 5v4M8 11.4v.1"></path><circle cx="8" cy="8" r="6.2"></circle></svg>
+        <div>
+          <div class="paused-title">Paused on all sites</div>
+          <div class="paused-sub">No panels appear and nothing is detected until you switch it back on.</div>
         </div>
       </div>
-      
-      <div class="toggle-wrapper">
-        <div class="status-pill" id="status-pill">
-          <span class="status-dot"></span>
-          <span id="status-text">Active</span>
+      <div class="paused-ghost">
+        <div class="profile-card" style="margin-bottom:0">
+          <div class="profile-header">
+            <span class="profile-avatar" id="paused-avatar" style="background:#242423;color:#8a8a86">·</span>
+            <div class="profile-info">
+              <span class="profile-name" id="paused-name">Your profile</span>
+              <span class="profile-email" id="paused-sub">Paused</span>
+            </div>
+          </div>
         </div>
-        <label class="toggle-switch">
-          <input type="checkbox" id="extension-toggle" checked>
-          <span class="toggle-track"></span>
+        <button class="btn-primary" disabled>Auto-fill this page</button>
+      </div>
+      <button class="btn-primary" id="resume-btn">Resume QuickApply</button>
+    </div>
+
+    <!-- Enabled state -->
+    <div class="enabled-state">
+      <div class="selector-wrapper">
+        <select id="profile-select">
+          <option value="">Select a profile…</option>
+        </select>
+      </div>
+
+      <div class="profile-card" id="profile-card">
+        <div class="no-profile" id="no-profile-state">
+          <div class="no-profile-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#c9f24d" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 6v12M6 12h12"></path></svg>
+          </div>
+          <h3>One profile, then never type it again</h3>
+          <p>Paste your resume and we'll pre-fill most of it. Takes about three minutes.</p>
+          <button class="btn-primary" id="create-profile-btn" style="margin-top:6px">Create profile</button>
+          <span class="alt">or <span id="linkedin-import-link">import from LinkedIn</span></span>
+        </div>
+
+        <div id="profile-details" style="display: none;">
+          <div class="profile-header">
+            <span class="profile-avatar" id="profile-avatar">·</span>
+            <div class="profile-info">
+              <span class="profile-name" id="profile-display-name">—</span>
+              <span class="profile-email" id="profile-display-email">—</span>
+            </div>
+          </div>
+          <div class="profile-completeness">
+            <div class="completeness-header">
+              <span class="completeness-label">Profile completeness</span>
+              <span class="completeness-value" id="completeness-percent">0%</span>
+            </div>
+            <div class="completeness-bar">
+              <span class="completeness-fill" id="completeness-fill" style="width: 0%"></span>
+            </div>
+            <span class="completeness-hint" id="completeness-hint">Fill the gaps to reach 100%</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button id="scan-page-btn" class="btn-primary">Auto-fill this page</button>
+        <div class="btn-row">
+          <button id="build-resume-btn" class="btn-secondary"><span id="resume-btn-text">Build resume</span></button>
+          <button id="generate-cover-letter-btn" class="btn-secondary"><span id="cover-letter-text">Cover letter</span></button>
+        </div>
+        <label class="setting-row">
+          <span>Auto-scan job pages</span>
+          <span class="toggle-switch">
+            <input type="checkbox" id="auto-scan-toggle" checked>
+            <span class="toggle-track"></span>
+          </span>
         </label>
       </div>
-    </header>
-    
-    <!-- Main Content -->
-    <main class="content">
-      <!-- Disabled State -->
-      <div class="disabled-state">
-        <div class="disabled-icon">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="12" r="10"/>
-            <line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/>
-          </svg>
-        </div>
-        <h3>Extension Paused</h3>
-        <p>Toggle the switch above to enable auto-fill and resume features.</p>
-      </div>
-      
-      <!-- Enabled State -->
-      <div class="enabled-state">
-        <!-- Profile Selector -->
-        <div class="profile-selector">
-          <label class="selector-label">Active Profile</label>
-          <div class="selector-wrapper">
-            <select id="profile-select">
-              <option value="">Select a profile...</option>
-            </select>
-          </div>
-        </div>
-        
-        <!-- Profile Card -->
-        <div class="profile-card" id="profile-card">
-          <div class="no-profile" id="no-profile-state">
-            <div class="no-profile-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
-                <circle cx="9" cy="7" r="4"/>
-                <line x1="19" y1="8" x2="19" y2="14"/>
-                <line x1="22" y1="11" x2="16" y2="11"/>
-              </svg>
-            </div>
-            <h3>Create Your Profile</h3>
-            <p>Build your resume to enable smart auto-fill</p>
-          </div>
-          
-          <div id="profile-details" style="display: none;">
-            <div class="profile-header">
-              <div class="profile-avatar" id="profile-avatar">JD</div>
-              <div class="profile-info">
-                <div class="profile-name" id="profile-display-name">John Doe</div>
-                <div class="profile-email" id="profile-display-email">john@example.com</div>
-              </div>
-            </div>
-            <div class="profile-completeness">
-              <div class="completeness-header">
-                <span class="completeness-label">Profile Completeness</span>
-                <span class="completeness-value" id="completeness-percent">0%</span>
-              </div>
-              <div class="completeness-bar">
-                <div class="completeness-fill" id="completeness-fill" style="width: 0%"></div>
-              </div>
-            </div>
-          </div>
-        </div>
-        
-        <!-- Main Actions -->
-        <div class="actions">
-          <button id="build-resume-btn" class="btn btn-primary">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-              <polyline points="14 2 14 8 20 8"/>
-              <line x1="12" y1="18" x2="12" y2="12"/>
-              <line x1="9" y1="15" x2="15" y2="15"/>
-            </svg>
-            <span id="resume-btn-text">Build Resume</span>
-          </button>
-          
-          <button id="scan-page-btn" class="btn btn-secondary">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
-            </svg>
-            Auto-Fill This Page
-          </button>
-          
-          <button id="generate-cover-letter-btn" class="btn btn-cover-letter">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-              <polyline points="14 2 14 8 20 8"/>
-              <line x1="16" y1="13" x2="8" y2="13"/>
-              <line x1="16" y1="17" x2="8" y2="17"/>
-              <line x1="10" y1="9" x2="8" y2="9"/>
-            </svg>
-            <span id="cover-letter-text">📝 Generate Cover Letter</span>
-          </button>
-        </div>
-      </div>
-    </main>
-    
-    <!-- Footer -->
-    <footer class="footer">
-      <span class="footer-version">v1.0.0</span>
-      <div class="footer-links">
-        <a href="#" class="footer-link" id="settings-link">Settings</a>
-        <a href="#" class="footer-link" id="help-link">Help</a>
-      </div>
-    </footer>
-  </div>
-  
+    </div>
+  </main>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <span class="footer-version">v2.4.0</span>
+    <a class="footer-link" id="settings-link">Settings</a>
+    <a class="footer-link" id="help-link">Help</a>
+  </footer>
+
   <script src="popup.js"></script>
 </body>
 </html>

@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>QuickApply Test Harness</title>
+<style>
+  body { font-family: -apple-system, sans-serif; margin: 0; background: #f5f5f7; }
+  .page { max-width: 640px; margin: 0 auto; padding: 24px 24px 120px; }
+  h1 { font-size: 20px; } h2 { font-size: 15px; margin-top: 32px; border-bottom: 1px solid #ddd; padding-bottom: 6px; }
+  .q { margin: 14px 0; }
+  .q label, .q .wd-label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+  input[type=text], input[type=email], input[type=tel], input[type=url], textarea, select {
+    width: 100%; padding: 8px; font-size: 14px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box;
+  }
+  .radio-group label { display: inline-flex; align-items: center; gap: 4px; font-weight: 400; margin-right: 16px; }
+  #harness-controls { position: fixed; bottom: 0; left: 0; right: 0; background: #1e293b; color: #fff; padding: 10px 16px; display: flex; gap: 10px; align-items: center; z-index: 999999; }
+  #harness-controls button { padding: 8px 14px; border: 0; border-radius: 6px; cursor: pointer; font-weight: 600; }
+  #dump { font-size: 11px; white-space: pre; overflow: auto; max-height: 80px; flex: 1; }
+  .wd-dropdown-btn { width: 100%; text-align: left; padding: 8px; border: 1px solid #ccc; border-radius: 6px; background: #fff; font-size: 14px; cursor: pointer; }
+  .wd-popup { position: absolute; background: #fff; border: 1px solid #ccc; border-radius: 6px; box-shadow: 0 4px 16px rgba(0,0,0,.15); z-index: 1000; min-width: 260px; }
+  .wd-popup div { padding: 8px 12px; cursor: pointer; font-size: 14px; }
+  .wd-popup div:hover { background: #eef2ff; }
+</style>
+</head>
+<body>
+<div class="page">
+  <h1>Acme Corp — Software Engineer Application</h1>
+
+  <h2>Plain HTML section (generic career page)</h2>
+  <form id="plain-form" onsubmit="return false">
+    <div class="q"><label for="p-first">First Name *</label><input type="text" id="p-first" name="first_name"></div>
+    <div class="q"><label for="p-last">Last Name *</label><input type="text" id="p-last" name="last_name"></div>
+    <div class="q"><label for="p-email">Email Address *</label><input type="email" id="p-email" name="email"></div>
+    <div class="q"><label for="p-phone">Phone Number</label><input type="tel" id="p-phone" name="phone"></div>
+    <div class="q"><label for="p-loc">City / Location</label><input type="text" id="p-loc" name="location"></div>
+    <div class="q"><label for="p-country">Country</label>
+      <select id="p-country" name="country">
+        <option value="">Select...</option>
+        <option>Norway</option>
+        <option>United States</option>
+        <option>India</option>
+        <option>United Kingdom</option>
+      </select>
+    </div>
+    <div class="q"><label for="p-linkedin">LinkedIn Profile URL</label><input type="url" id="p-linkedin" name="linkedin"></div>
+    <div class="q"><label for="p-github">GitHub URL</label><input type="url" id="p-github" name="github"></div>
+    <div class="q">
+      <label>Are you legally authorized to work in the United States? *</label>
+      <div class="radio-group">
+        <label><input type="radio" name="work_auth" value="yes_opt"> Yes</label>
+        <label><input type="radio" name="work_auth" value="no_opt"> No</label>
+      </div>
+    </div>
+    <div class="q">
+      <label>Will you now or in the future require visa sponsorship? *</label>
+      <div class="radio-group">
+        <label><input type="radio" name="sponsorship" value="y"> Yes</label>
+        <label><input type="radio" name="sponsorship" value="n"> No</label>
+      </div>
+    </div>
+    <div class="q">
+      <label>How did you hear about us?</label>
+      <select id="p-source" name="referral_source">
+        <option value="">Select...</option>
+        <option>LinkedIn</option>
+        <option>Online Search</option>
+        <option>Employee Referral</option>
+      </select>
+    </div>
+    <div class="q"><label for="p-why">Why are you interested in this role?</label><textarea id="p-why" rows="3" name="why_interested"></textarea></div>
+    <div class="q"><label for="p-hack">What is your favorite productivity hack?</label><textarea id="p-hack" rows="3" name="productivity_hack"></textarea></div>
+  </form>
+
+  <h2>Create your account (ATS wall)</h2>
+  <form id="account-form" onsubmit="return false">
+    <div class="q"><label for="a-email">Email Address *</label><input type="email" id="a-email" name="account_email" autocomplete="username"></div>
+    <div class="q"><label for="a-pass">Create Password *</label><input type="password" id="a-pass" name="password" autocomplete="new-password"></div>
+    <div class="q"><label for="a-pass2">Verify New Password *</label><input type="password" id="a-pass2" name="confirm_password" autocomplete="new-password"></div>
+  </form>
+
+  <h2>React-controlled section (Workday-style)</h2>
+  <div id="react-root"></div>
+</div>
+
+<div id="harness-controls">
+  <button id="btn-scan" style="background:#4F46E5;color:#fff">▶ Simulate popup Scan</button>
+  <button id="btn-dump" style="background:#0ea5e9;color:#fff">Dump state</button>
+  <div id="dump"></div>
+</div>
+
+<script>
+// ---- chrome API shim (must exist before content.js loads) ----
+const MOCK_PROFILE = {
+  profile_id: 'test-1',
+  name: 'Tanmay Maka',
+  first_name: 'Tanmay',
+  last_name: 'Maka',
+  email: 'tanmay@example.com',
+  phone: '+1 555 010 1234',
+  location: 'San Francisco, CA',
+  country: 'United States',
+  fields: {
+    linkedin_url: 'https://linkedin.com/in/tanmay-maka',
+    github_url: 'https://github.com/maka-tanmay',
+    work_authorized: 'Yes',
+    sponsorship: 'Yes',
+    university: 'Minerva University',
+    major: 'Business & Computational Sciences',
+    graduation_date: 'May 2027',
+    education_level: "Bachelor's Degree",
+    enrolled: 'Yes',
+    years_experience: '2',
+    referral_source: 'LinkedIn',
+  },
+  answers: {
+    why_interested: 'I am excited by the opportunity to build products that reduce manual work, as I did with my SAR data-checking tool at UL Solutions.',
+  },
+  cover_letter_snippets: [],
+};
+
+window.__contentListeners = [];
+window.chrome = {
+  runtime: {
+    lastError: undefined,
+    sendMessage(msg, cb) {
+      const AI_ON = new URLSearchParams(location.search).has('ai');
+      let resp = {};
+      let delay = 5;
+      if (msg.type === 'isEnabled') resp = true;
+      else if (msg.type === 'getSettings') resp = { enabled: true, extensionEnabled: true, aiEnabled: AI_ON, hasApiKey: AI_ON, activeProfileId: 'test-1' };
+      else if (msg.type === 'getActiveProfile') resp = 'test-1';
+      else if (msg.type === 'getProfile') resp = MOCK_PROFILE;
+      else if (msg.type === 'getLearnedMappings') resp = [];
+      else if (msg.type === 'aiAnswerQuestion') { resp = { answer: 'MOCK CLAUDE ANSWER: I timebox deep work and batch shallow tasks.' }; delay = 1200; }
+      else if (msg.type === 'aiMatch') { resp = { answer: 'Yes', confidence: 0.8, field_key: 'mock' }; delay = 1200; }
+      setTimeout(() => cb && cb(resp), delay);
+    },
+    onMessage: {
+      addListener(fn) { window.__contentListeners.push(fn); },
+    },
+  },
+  storage: {
+    local: {
+      get(keys, cb) {
+        const src = window.__mockStorage;
+        const keyList = typeof keys === 'string' ? [keys] : Array.isArray(keys) ? keys : Object.keys(keys || src);
+        const r = {};
+        keyList.forEach(k => { if (k in src) r[k] = src[k]; });
+        if (cb) cb(r);
+        return Promise.resolve(r);
+      },
+      set(obj, cb) { Object.assign(window.__mockStorage, obj); if (cb) cb(); return Promise.resolve(); },
+    },
+  },
+};
+
+// Dummy ATS credentials for the account-wall test (never real ones — repo is public)
+window.__mockStorage = {
+  qaAccountEmail: 'tanmay@uni.example.edu',
+  qaAccountPassword: 'harness-dummy-pw-1',
+  qaAccounts: new URLSearchParams(location.search).has('savedacct')
+    ? { 'localhost': { email: 'tanmay@uni.example.edu', createdAt: 1752000000000 } }
+    : {},
+};
+
+// Simulate the popup sending a scan message
+document.getElementById('btn-scan').addEventListener('click', () => {
+  window.__contentListeners.forEach(fn => fn({ type: 'scan' }, {}, (resp) => console.log('scan response', resp)));
+});
+</script>
+
+<script src="../node_modules/react/umd/react.development.js"></script>
+<script src="../node_modules/react-dom/umd/react-dom.development.js"></script>
+<script>
+// ---- Workday-style React form: controlled inputs + portal dropdown ----
+const { useState, useEffect, createElement: h } = React;
+window.__reactState = {};
+
+function WdText({ id, label, field }) {
+  const [val, setVal] = useState('');
+  useEffect(() => { window.__reactState[field] = val; }, [val]);
+  return h('div', { className: 'q', 'data-automation-id': 'formField-' + field },
+    h('div', { className: 'wd-label', 'data-automation-id': field + '-label' }, label),
+    h('input', {
+      type: 'text', id, 'data-automation-id': 'textInputBox',
+      value: val, onChange: e => setVal(e.target.value),
+    })
+  );
+}
+
+// Workday-style dropdown: a button; options render into a document-level portal ~250ms after click
+function WdDropdown({ label, field, options }) {
+  const [val, setVal] = useState('');
+  const [open, setOpen] = useState(false);
+  useEffect(() => { window.__reactState[field] = val; }, [val]);
+  useEffect(() => {
+    if (!open) return;
+    const popup = document.createElement('div');
+    popup.className = 'wd-popup';
+    popup.setAttribute('data-automation-widget', 'wd-popup-list');
+    const btn = document.getElementById('wd-dd-' + field);
+    const rect = btn.getBoundingClientRect();
+    popup.style.left = rect.left + 'px';
+    popup.style.top = (rect.bottom + window.scrollY + 4) + 'px';
+    const t = setTimeout(() => {  // simulate async option rendering
+      options.forEach(opt => {
+        const d = document.createElement('div');
+        d.setAttribute('data-automation-id', 'promptOption');
+        d.textContent = opt;
+        d.addEventListener('click', () => { setVal(opt); setOpen(false); });
+        popup.appendChild(d);
+      });
+      document.body.appendChild(popup);
+    }, 250);
+    return () => { clearTimeout(t); popup.remove(); };
+  }, [open]);
+  return h('div', { className: 'q', 'data-automation-id': 'formField-' + field },
+    h('div', { className: 'wd-label', 'data-automation-id': field + '-label' }, label),
+    h('button', {
+      id: 'wd-dd-' + field, className: 'wd-dropdown-btn', 'aria-haspopup': 'listbox',
+      'data-automation-id': field + '-dropdown',
+      onClick: () => setOpen(o => !o),
+    }, val || 'Select One')
+  );
+}
+
+function WdForm() {
+  return h('div', null,
+    h(WdText, { id: 'wd-school', label: 'School or University *', field: 'university' }),
+    h(WdText, { id: 'wd-degree', label: 'Field of Study', field: 'major' }),
+    h(WdDropdown, { label: 'Country/Territory of Citizenship', field: 'citizenship', options: ['Norway', 'United States', 'India', 'United Kingdom'] }),
+    h(WdDropdown, { label: 'Have you previously worked for Acme Corp?', field: 'prev_worked', options: ['Yes', 'No'] }),
+    h(WdDropdown, { label: 'How did you hear about this position?', field: 'wd_source', options: ['LinkedIn', 'Indeed', 'Company Website', 'Employee Referral'] })
+  );
+}
+ReactDOM.createRoot(document.getElementById('react-root')).render(h(WdForm));
+
+// ---- state dump for verification ----
+document.getElementById('btn-dump').addEventListener('click', () => {
+  const plain = {};
+  document.querySelectorAll('#plain-form input, #plain-form select, #plain-form textarea, #account-form input').forEach(el => {
+    if (el.type === 'radio') { if (el.checked) plain[el.name] = el.value; }
+    else plain[el.name || el.id] = el.value;
+  });
+  window.__dumpResult = { plain, react: window.__reactState };
+  document.getElementById('dump').textContent = JSON.stringify(window.__dumpResult, null, 1);
+});
+</script>
+
+<script src="../dist/content.js"></script>
+</body>
+</html>
